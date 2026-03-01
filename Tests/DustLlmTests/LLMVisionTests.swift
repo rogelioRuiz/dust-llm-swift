@@ -3,10 +3,15 @@ import XCTest
 import DustCore
 import llava
 
+private final class Box<T>: @unchecked Sendable {
+    var value: T
+    init(_ value: T) { self.value = value }
+}
+
 final class LLMVisionTests: XCTestCase {
     func testL6T1LoadVisionCapableModelInitializesVisionEncoder() throws {
         let fixtureURL = try fixtureURL()
-        var visionFactoryCalled = false
+        let visionFactoryCalled = Box(false)
         let mockEncoder = MockVisionEncoder()
 
         let manager = LLMSessionManager(
@@ -14,7 +19,7 @@ final class LLMVisionTests: XCTestCase {
                 let metadata = LLMModelMetadata(name: "vision-model", chatTemplate: nil, hasVision: true)
                 let encoder: VisionEncoderProtocol?
                 if metadata.hasVision {
-                    visionFactoryCalled = true
+                    visionFactoryCalled.value = true
                     encoder = mockEncoder
                 } else {
                     encoder = nil
@@ -38,7 +43,7 @@ final class LLMVisionTests: XCTestCase {
 
         XCTAssertTrue(session.metadata.hasVision)
         XCTAssertNotNil(session.visionEncoder)
-        XCTAssertTrue(visionFactoryCalled)
+        XCTAssertTrue(visionFactoryCalled.value)
     }
 
     func testL6T2TextOnlyModelKeepsVisionEncoderNil() {
@@ -155,8 +160,8 @@ final class LLMVisionTests: XCTestCase {
         defer { visionEncoder.close() }
         let session = makeSession(engine: engine, visionEncoder: visionEncoder)
         let completeExpectation = expectation(description: "complete")
-        var observedPromptTokens = 0
-        var observedTokenCount = 0
+        let observedPromptTokens = Box(0)
+        let observedTokenCount = Box(0)
 
         session.streamGenerate(
             prompt: "describe",
@@ -166,8 +171,8 @@ final class LLMVisionTests: XCTestCase {
             sampler: SamplerConfig(),
             onToken: { _, _, _ in },
             onComplete: { _, tokenCount, promptTokens, _, _ in
-                observedTokenCount = tokenCount
-                observedPromptTokens = promptTokens
+                observedTokenCount.value = tokenCount
+                observedPromptTokens.value = promptTokens
                 completeExpectation.fulfill()
             },
             onError: { error, _ in
@@ -177,8 +182,8 @@ final class LLMVisionTests: XCTestCase {
         )
 
         wait(for: [completeExpectation], timeout: 2.0)
-        XCTAssertEqual(observedTokenCount, 2)
-        XCTAssertGreaterThan(observedPromptTokens, 3)
+        XCTAssertEqual(observedTokenCount.value, 2)
+        XCTAssertGreaterThan(observedPromptTokens.value, 3)
     }
 
     private func makeSession(

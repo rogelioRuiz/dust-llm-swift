@@ -2,6 +2,11 @@ import XCTest
 @testable import DustLlm
 import DustCore
 
+private final class Box<T>: @unchecked Sendable {
+    var value: T
+    init(_ value: T) { self.value = value }
+}
+
 final class LLMSessionManagerTests: XCTestCase {
     func testL1T1LoadValidFixtureCreatesSessionAndMetadata() throws {
         let fixtureURL = try fixtureURL()
@@ -89,10 +94,10 @@ final class LLMSessionManagerTests: XCTestCase {
         }
 
         // Verify the session factory is never invoked for a rejected format.
-        var factoryCalled = false
+        let factoryCalled = Box(false)
         let manager = LLMSessionManager(
             sessionFactory: { _, modelId, _, priority in
-                factoryCalled = true
+                factoryCalled.value = true
                 return LlamaSession(
                     sessionId: modelId,
                     metadata: LLMModelMetadata(name: nil, chatTemplate: nil, hasVision: false),
@@ -101,7 +106,7 @@ final class LLMSessionManagerTests: XCTestCase {
             }
         )
         _ = manager // suppress unused warning
-        XCTAssertFalse(factoryCalled, "Factory must not be called when format is rejected at plugin layer")
+        XCTAssertFalse(factoryCalled.value, "Factory must not be called when format is rejected at plugin layer")
     }
 
     func testL1T5UnloadLoadedModelRemovesSession() async throws {
