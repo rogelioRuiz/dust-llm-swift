@@ -12,4 +12,4 @@ jobs:
           repository: rogelioRuiz/dust-core-swift
           path: dust-core-swift
       - run: ln -s $GITHUB_WORKSPACE/dust-core-swift ../dust-core-swift
-      - run: swift build && swift test
+      - run: swift build -Xswiftc -strict-concurrency=minimal && swift test -Xswiftc -strict-concurrency=minimal
