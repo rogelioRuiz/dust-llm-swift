@@ -1,3 +1,13 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/branding/dust_white.png">
+    <source media="(prefers-color-scheme: light)" srcset="../assets/branding/dust_black.png">
+    <img alt="dust" src="../assets/branding/dust_black.png" width="200">
+  </picture>
+</p>
+
+<p align="center"><strong>Device Unified Serving Toolkit</strong></p>
+
 # dust-llm-swift
 
 GGUF/llama.cpp inference and chat runtime for Dust — iOS/macOS with Metal GPU acceleration.
@@ -102,3 +112,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding conventions
 ## License
 
 Copyright 2026 T6X. Licensed under the [Apache License 2.0](LICENSE).
+
+---
+
+<p align="center">
+  Part of <a href="../README.md"><strong>dust</strong></a> — Device Unified Serving Toolkit
+</p>
