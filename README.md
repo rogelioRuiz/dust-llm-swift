@@ -2,6 +2,8 @@
   <img alt="dust" src="assets/dust_banner.png" width="400">
 </p>
 
+<p align="center"><strong>Device Unified Serving Toolkit</strong></p>
+
 # dust-llm-swift
 
 GGUF/llama.cpp inference and chat runtime for Dust — iOS/macOS with Metal GPU acceleration.
