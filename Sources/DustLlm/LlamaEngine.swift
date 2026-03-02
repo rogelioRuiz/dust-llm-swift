@@ -251,7 +251,7 @@ extension LlamaContext: LlamaEngine {
         }
 
         let vocab = llama_model_get_vocab(model)
-        llama_kv_cache_clear(context)
+        llama_memory_clear(llama_get_memory(context), true)
 
         var batch = llama_batch_init(Int32(max(promptTokens.count, 1)), 0, 1)
         defer {
@@ -312,7 +312,7 @@ extension LlamaContext: LlamaEngine {
         }
 
         let vocab = llama_model_get_vocab(model)
-        llama_kv_cache_clear(context)
+        llama_memory_clear(llama_get_memory(context), true)
 
         var batch = llama_batch_init(Int32(max(promptTokens.count, 1)), 0, 1)
         defer {
@@ -379,7 +379,7 @@ extension LlamaContext: LlamaEngine {
         }
 
         let vocab = llama_model_get_vocab(model)
-        llama_kv_cache_clear(context)
+        llama_memory_clear(llama_get_memory(context), true)
 
         var batch = llama_batch_init(Int32(max(promptTokens.count, 1)), 0, 1)
         defer {
@@ -451,7 +451,7 @@ extension LlamaContext: LlamaEngine {
         }
 
         let vocab = llama_model_get_vocab(model)
-        llama_kv_cache_clear(context)
+        llama_memory_clear(llama_get_memory(context), true)
 
         var batch = llama_batch_init(Int32(max(promptTokens.count, 1)), 0, 1)
         defer {

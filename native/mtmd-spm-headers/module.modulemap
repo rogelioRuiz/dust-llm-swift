@@ -1,0 +1,5 @@
+module mtmd {
+    header "mtmd.h"
+    header "mtmd-helper.h"
+    export *
+}

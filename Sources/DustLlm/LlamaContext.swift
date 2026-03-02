@@ -152,7 +152,7 @@ public final class LlamaContext: @unchecked Sendable {
         llama_set_embeddings(context, true)
         defer { llama_set_embeddings(context, false) }
 
-        llama_kv_cache_clear(context)
+        llama_memory_clear(llama_get_memory(context), true)
 
         var batch = llama_batch_init(Int32(tokens.count), 0, 1)
         defer { llama_batch_free(batch) }

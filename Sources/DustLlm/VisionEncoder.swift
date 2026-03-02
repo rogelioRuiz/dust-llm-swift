@@ -1,14 +1,11 @@
 import Foundation
 import DustCore
 import llama
-import llava
+import mtmd
 
 public struct ImageEmbedding {
-    public let handle: UnsafeMutablePointer<llava_image_embed>
-
-    public var tokenCount: Int {
-        Int(handle.pointee.n_image_pos)
-    }
+    public let chunks: OpaquePointer  // mtmd_input_chunks *
+    public let tokenCount: Int
 }
 
 public protocol VisionEncoderProtocol: AnyObject {
@@ -24,32 +21,33 @@ public protocol VisionEncoderProtocol: AnyObject {
 }
 
 public final class VisionEncoder: VisionEncoderProtocol, @unchecked Sendable {
-    private var clipContext: OpaquePointer?
+    private var mtmdContext: OpaquePointer?  // mtmd_context *
 
-    public init(mmprojPath: String) throws {
+    public init(mmprojPath: String, model: OpaquePointer) throws {
         guard FileManager.default.fileExists(atPath: mmprojPath) else {
             throw LlamaError.fileNotFound(path: mmprojPath)
         }
 
-        clipContext = mmprojPath.withCString {
-            clip_model_load($0, 1)
+        var params = mtmd_context_params_default()
+        params.use_gpu = true
+
+        mtmdContext = mmprojPath.withCString { pathPtr in
+            mtmd_init_from_file(pathPtr, model, params)
         }
 
-        guard clipContext != nil else {
+        guard mtmdContext != nil else {
             throw LlamaError.loadFailed(path: mmprojPath)
         }
     }
 
     public var imageTokenCount: Int {
-        guard let clipContext else {
-            return 0
-        }
-
-        return Int(clip_n_patches(clipContext)) + 1
+        // With mtmd, token count is determined per-image during tokenization.
+        // Return 0 as a placeholder; actual count comes from the embedding.
+        0
     }
 
     public func encode(imageBytes: Data) throws -> ImageEmbedding {
-        guard let clipContext else {
+        guard let mtmdContext else {
             throw LlamaError.modelEvicted
         }
 
@@ -57,24 +55,56 @@ public final class VisionEncoder: VisionEncoderProtocol, @unchecked Sendable {
             throw DustCoreError.inferenceFailed(detail: "Failed to encode image")
         }
 
-        let handle = imageBytes.withUnsafeBytes { rawBuffer -> UnsafeMutablePointer<llava_image_embed>? in
+        let bitmap: OpaquePointer? = imageBytes.withUnsafeBytes { rawBuffer -> OpaquePointer? in
             guard let baseAddress = rawBuffer.baseAddress else {
                 return nil
             }
-
-            return llava_image_embed_make_with_bytes(
-                clipContext,
-                4,
+            return mtmd_helper_bitmap_init_from_buf(
+                mtmdContext,
                 baseAddress.assumingMemoryBound(to: UInt8.self),
-                Int32(imageBytes.count)
+                imageBytes.count
             )
         }
 
-        guard let handle else {
-            throw DustCoreError.inferenceFailed(detail: "Failed to encode image")
+        guard let bitmap else {
+            throw DustCoreError.inferenceFailed(detail: "Failed to decode image bitmap")
         }
 
-        return ImageEmbedding(handle: handle)
+        guard let chunks = mtmd_input_chunks_init() else {
+            mtmd_bitmap_free(bitmap)
+            throw DustCoreError.inferenceFailed(detail: "Failed to create input chunks")
+        }
+
+        let marker = String(cString: mtmd_default_marker())
+        var inputText = mtmd_input_text(
+            text: nil,
+            add_special: true,
+            parse_special: true
+        )
+
+        let result: Int32 = marker.withCString { markerPtr in
+            inputText.text = markerPtr
+            var bitmapPtr: UnsafePointer<mtmd_bitmap>? = UnsafePointer(bitmap)
+            return withUnsafePointer(to: &bitmapPtr) { bitmapPtrPtr in
+                mtmd_tokenize(
+                    mtmdContext,
+                    chunks,
+                    &inputText,
+                    bitmapPtrPtr,
+                    1
+                )
+            }
+        }
+
+        mtmd_bitmap_free(bitmap)
+
+        guard result == 0 else {
+            mtmd_input_chunks_free(chunks)
+            throw DustCoreError.inferenceFailed(detail: "Failed to tokenize image (error \(result))")
+        }
+
+        let tokenCount = Int(mtmd_helper_get_n_tokens(chunks))
+        return ImageEmbedding(chunks: chunks, tokenCount: tokenCount)
     }
 
     public func evalImageEmbed(
@@ -82,21 +112,38 @@ public final class VisionEncoder: VisionEncoderProtocol, @unchecked Sendable {
         context: OpaquePointer,
         nPast: inout Int32
     ) throws {
+        guard let mtmdContext else {
+            throw LlamaError.modelEvicted
+        }
+
         let batchSize = Int32(llama_n_batch(context))
-        let ok = llava_eval_image_embed(context, embedding.handle, batchSize, &nPast)
-        guard ok else {
+        var newNPast = nPast
+        let result = mtmd_helper_eval_chunks(
+            mtmdContext,
+            context,
+            embedding.chunks,
+            nPast,
+            0,           // seq_id
+            batchSize,
+            true,        // logits_last
+            &newNPast
+        )
+
+        guard result == 0 else {
             throw DustCoreError.inferenceFailed(detail: "Failed to evaluate image embedding")
         }
+
+        nPast = newNPast
     }
 
     public func freeEmbedding(_ embedding: ImageEmbedding) {
-        llava_image_embed_free(embedding.handle)
+        mtmd_input_chunks_free(embedding.chunks)
     }
 
     public func close() {
-        if let clipContext {
-            clip_free(clipContext)
-            self.clipContext = nil
+        if let mtmdContext {
+            mtmd_free(mtmdContext)
+            self.mtmdContext = nil
         }
     }
 

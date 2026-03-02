@@ -8,7 +8,7 @@ public enum MemoryPressureLevel {
 
 public final class LLMSessionManager: DustModelServer, @unchecked Sendable {
     public typealias SessionFactory = @Sendable (_ path: String, _ modelId: String, _ config: LLMConfig, _ priority: DustSessionPriority) throws -> LlamaSession
-    public typealias VisionEncoderFactory = @Sendable (_ mmprojPath: String) throws -> VisionEncoderProtocol
+    public typealias VisionEncoderFactory = @Sendable (_ mmprojPath: String, _ model: OpaquePointer) throws -> VisionEncoderProtocol
 
     public static let inferenceQueue = DispatchQueue(
         label: "io.t6x.dust.llm.inference",
@@ -24,8 +24,8 @@ public final class LLMSessionManager: DustModelServer, @unchecked Sendable {
 
     public init(
         sessionFactory: SessionFactory? = nil,
-        visionEncoderFactory: @escaping VisionEncoderFactory = { mmprojPath in
-            try VisionEncoder(mmprojPath: mmprojPath)
+        visionEncoderFactory: @escaping VisionEncoderFactory = { mmprojPath, model in
+            try VisionEncoder(mmprojPath: mmprojPath, model: model)
         }
     ) {
         if let sessionFactory {
@@ -35,6 +35,7 @@ public final class LLMSessionManager: DustModelServer, @unchecked Sendable {
                 let context = try LlamaContext(path: path, config: config)
                 let visionEncoder = try Self.makeVisionEncoder(
                     for: context.metadata,
+                    model: context.model,
                     modelPath: path,
                     config: config,
                     visionEncoderFactory: visionEncoderFactory
@@ -341,15 +342,16 @@ public final class LLMSessionManager: DustModelServer, @unchecked Sendable {
 
     private static func makeVisionEncoder(
         for metadata: LLMModelMetadata,
+        model: OpaquePointer?,
         modelPath: String,
         config: LLMConfig,
         visionEncoderFactory: VisionEncoderFactory
     ) throws -> VisionEncoderProtocol? {
-        guard metadata.hasVision else {
+        guard metadata.hasVision, let model else {
             return nil
         }
 
-        return try visionEncoderFactory(resolveMMProjPath(modelPath: modelPath, config: config))
+        return try visionEncoderFactory(resolveMMProjPath(modelPath: modelPath, config: config), model)
     }
 
     private static func resolveMMProjPath(

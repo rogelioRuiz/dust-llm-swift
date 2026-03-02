@@ -1,7 +1,6 @@
 import XCTest
 @testable import DustLlm
 import DustCore
-import llava
 
 private final class Box<T>: @unchecked Sendable {
     var value: T
@@ -82,11 +81,17 @@ final class LLMVisionTests: XCTestCase {
     }
 
     func testL6T4RealClipEncodeReturnsEmbeddingWhenEnvIsSet() throws {
-        guard let mmprojPath = ProcessInfo.processInfo.environment["LLAVA_MMPROJ_PATH"] else {
-            throw XCTSkip("LLAVA_MMPROJ_PATH is not set")
+        guard let mmprojPath = ProcessInfo.processInfo.environment["LLAVA_MMPROJ_PATH"],
+              let modelPath = ProcessInfo.processInfo.environment["LLAVA_MODEL_PATH"] else {
+            throw XCTSkip("LLAVA_MMPROJ_PATH and LLAVA_MODEL_PATH must both be set")
         }
 
-        let encoder = try VisionEncoder(mmprojPath: mmprojPath)
+        let context = try LlamaContext(path: modelPath, config: LLMConfig())
+        guard let model = context.model else {
+            throw XCTSkip("Failed to load model")
+        }
+
+        let encoder = try VisionEncoder(mmprojPath: mmprojPath, model: model)
         defer { encoder.close() }
 
         let embedding = try encoder.encode(imageBytes: pngData())
@@ -150,13 +155,18 @@ final class LLMVisionTests: XCTestCase {
     }
 
     func testL6T8StreamGenerateWithImageReportsPromptTokens() throws {
-        guard let mmprojPath = ProcessInfo.processInfo.environment["LLAVA_MMPROJ_PATH"] else {
-            throw XCTSkip("LLAVA_MMPROJ_PATH is not set")
+        guard let mmprojPath = ProcessInfo.processInfo.environment["LLAVA_MMPROJ_PATH"],
+              let modelPath = ProcessInfo.processInfo.environment["LLAVA_MODEL_PATH"] else {
+            throw XCTSkip("LLAVA_MMPROJ_PATH and LLAVA_MODEL_PATH must both be set")
         }
 
         let engine = VisionMockLlamaEngine()
         engine.shouldCallVisionEval = false
-        let visionEncoder = try VisionEncoder(mmprojPath: mmprojPath)
+        let context = try LlamaContext(path: modelPath, config: LLMConfig())
+        guard let model = context.model else {
+            throw XCTSkip("Failed to load model")
+        }
+        let visionEncoder = try VisionEncoder(mmprojPath: mmprojPath, model: model)
         defer { visionEncoder.close() }
         let session = makeSession(engine: engine, visionEncoder: visionEncoder)
         let completeExpectation = expectation(description: "complete")
@@ -349,17 +359,12 @@ private final class MockVisionEncoder: VisionEncoderProtocol {
     var lastEvalNPastBefore: Int?
     var lastEvalNPastAfter: Int?
 
-    private let backingFloats = UnsafeMutablePointer<Float>.allocate(capacity: 1)
-    private let backingEmbed = UnsafeMutablePointer<llava_image_embed>.allocate(capacity: 1)
-
     init(
         imageTokenCount: Int = 576,
         encodeError: Error? = nil
     ) {
         self.imageTokenCount = imageTokenCount
         self.encodeError = encodeError
-        backingFloats.initialize(to: 0)
-        backingEmbed.initialize(to: llava_image_embed(embed: backingFloats, n_image_pos: Int32(imageTokenCount)))
     }
 
     func encode(imageBytes: Data) throws -> ImageEmbedding {
@@ -368,8 +373,9 @@ private final class MockVisionEncoder: VisionEncoderProtocol {
             throw encodeError
         }
 
-        backingEmbed.pointee.n_image_pos = Int32(imageTokenCount)
-        return ImageEmbedding(handle: backingEmbed)
+        // Use a dummy opaque pointer for testing — never dereferenced by mock eval.
+        let dummyChunks = OpaquePointer(bitPattern: 0x1)!
+        return ImageEmbedding(chunks: dummyChunks, tokenCount: imageTokenCount)
     }
 
     func evalImageEmbed(
@@ -388,11 +394,4 @@ private final class MockVisionEncoder: VisionEncoderProtocol {
     }
 
     func close() {}
-
-    deinit {
-        backingEmbed.deinitialize(count: 1)
-        backingEmbed.deallocate()
-        backingFloats.deinitialize(count: 1)
-        backingFloats.deallocate()
-    }
 }
