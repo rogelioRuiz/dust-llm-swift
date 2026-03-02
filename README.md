@@ -15,6 +15,7 @@
   <a href="https://swift.org"><img alt="Swift" src="https://img.shields.io/badge/Swift-5.9-orange.svg"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/Platforms-iOS_16+_|_macOS_14+-lightgrey">
   <img alt="GGUF" src="https://img.shields.io/badge/GGUF-llama.cpp-blueviolet">
+  <a href="https://github.com/rogelioRuiz/dust-llm-swift/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/rogelioRuiz/dust-llm-swift/actions/workflows/ci.yml/badge.svg?branch=main"></a>
 </p>
 
 ---
