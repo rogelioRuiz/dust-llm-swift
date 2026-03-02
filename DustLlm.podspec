@@ -23,6 +23,7 @@ Pod::Spec.new do |s|
     'native/llama.cpp/ggml/include/**/*.{h,hpp}',
     'native/llama.cpp/ggml/src/**/*.{c,cc,cpp,h,hpp,m,mm}',
     'native/llama.cpp/vendor/**/*.{h,hpp}',
+    'native/llama.cpp/tools/mtmd/**/*.{c,cc,cpp,h,hpp}',
   ]
   s.exclude_files = [
     'native/llama.cpp/common/**/*',
@@ -32,7 +33,16 @@ Pod::Spec.new do |s|
     'native/llama.cpp/models/**/*',
     'native/llama.cpp/scripts/**/*',
     'native/llama.cpp/tests/**/*',
-    'native/llama.cpp/tools/**/*',
+    'native/llama.cpp/tools/mtmd/deprecation-warning.cpp',
+    'native/llama.cpp/tools/mtmd/mtmd-cli.cpp',
+    'native/llama.cpp/ggml/src/ggml-cpu/arch/loongarch/**/*',
+    'native/llama.cpp/ggml/src/ggml-cpu/arch/powerpc/**/*',
+    'native/llama.cpp/ggml/src/ggml-cpu/arch/riscv/**/*',
+    'native/llama.cpp/ggml/src/ggml-cpu/arch/s390/**/*',
+    'native/llama.cpp/ggml/src/ggml-cpu/arch/wasm/**/*',
+    'native/llama.cpp/ggml/src/ggml-cpu/arch/x86/**/*',
+    'native/llama.cpp/ggml/src/ggml-cpu/spacemit/**/*',
+    'native/llama.cpp/ggml/src/ggml-cpu/kleidiai/**/*',
   ]
   s.ios.deployment_target = '16.0'
   s.module_name = 'DustLlm'
@@ -41,8 +51,8 @@ Pod::Spec.new do |s|
   s.frameworks = ['Accelerate', 'Metal', 'MetalKit']
   s.pod_target_xcconfig = {
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
-    'HEADER_SEARCH_PATHS' => '$(inherited) $(PODS_TARGET_SRCROOT)/native/llama.cpp/include $(PODS_TARGET_SRCROOT)/native/llama.cpp/ggml/include $(PODS_TARGET_SRCROOT)/native/llama.cpp/src $(PODS_TARGET_SRCROOT)/native/llama.cpp/ggml/src $(PODS_TARGET_SRCROOT)/native/llama.cpp/vendor',
-    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) GGML_USE_METAL=1 GGML_METAL_EMBED_LIBRARY=1'
+    'HEADER_SEARCH_PATHS' => '$(inherited) $(PODS_TARGET_SRCROOT)/native/llama.cpp/include $(PODS_TARGET_SRCROOT)/native/llama.cpp/ggml/include $(PODS_TARGET_SRCROOT)/native/llama.cpp/src $(PODS_TARGET_SRCROOT)/native/llama.cpp/ggml/src $(PODS_TARGET_SRCROOT)/native/llama.cpp/vendor $(PODS_TARGET_SRCROOT)/native/llama.cpp/tools/mtmd',
+    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) GGML_USE_METAL=1 GGML_METAL_EMBED_LIBRARY=1 GGML_VERSION=\"0.9.7\" GGML_COMMIT=\"b8189\"'
   }
   s.pod_target_xcconfig['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO' if xcode_major >= 26
   s.swift_version = '5.9'

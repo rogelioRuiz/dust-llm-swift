@@ -84,8 +84,8 @@ public final class VisionEncoder: VisionEncoderProtocol, @unchecked Sendable {
 
         let result: Int32 = marker.withCString { markerPtr in
             inputText.text = markerPtr
-            var bitmapPtr: UnsafePointer<mtmd_bitmap>? = UnsafePointer(bitmap)
-            return withUnsafePointer(to: &bitmapPtr) { bitmapPtrPtr in
+            var bitmapPtr: OpaquePointer? = bitmap
+            return withUnsafeMutablePointer(to: &bitmapPtr) { bitmapPtrPtr in
                 mtmd_tokenize(
                     mtmdContext,
                     chunks,

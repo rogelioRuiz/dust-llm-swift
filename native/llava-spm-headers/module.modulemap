@@ -1,5 +1,0 @@
-module llava {
-    header "clip-shim.h"
-    header "llava.h"
-    export *
-}

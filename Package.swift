@@ -43,6 +43,15 @@ let package = Package(
                 "llama.cpp/ggml/src/CMakeLists.txt",
                 "llama.cpp/ggml/src/ggml-cpu/CMakeLists.txt",
                 "llama.cpp/ggml/src/ggml-cpu/cmake",
+                // Platform-specific CPU backends not relevant for Apple
+                "llama.cpp/ggml/src/ggml-cpu/spacemit",
+                "llama.cpp/ggml/src/ggml-cpu/kleidiai",
+                "llama.cpp/ggml/src/ggml-cpu/arch/loongarch",
+                "llama.cpp/ggml/src/ggml-cpu/arch/powerpc",
+                "llama.cpp/ggml/src/ggml-cpu/arch/riscv",
+                "llama.cpp/ggml/src/ggml-cpu/arch/s390",
+                "llama.cpp/ggml/src/ggml-cpu/arch/wasm",
+                "llama.cpp/ggml/src/ggml-cpu/arch/x86",
                 "llama.cpp/ggml/src/ggml-metal/CMakeLists.txt",
                 // Metal shader — excluded from sources, added as resource below
                 "llama.cpp/ggml/src/ggml-metal/ggml-metal.metal",
@@ -78,6 +87,8 @@ let package = Package(
                 .headerSearchPath("llama.cpp/ggml/src/ggml-cpu"),
                 .define("GGML_USE_METAL"),
                 .define("GGML_USE_CPU"),
+                .define("GGML_VERSION", to: "\"0.9.7\""),
+                .define("GGML_COMMIT", to: "\"b8189\""),
                 // SPM defines SWIFT_PACKAGE but doesn't generate SWIFTPM_MODULE_BUNDLE for C targets.
                 // ggml-metal.m uses it to find the Metal shader at runtime — fall back to mainBundle.
                 .define("SWIFTPM_MODULE_BUNDLE", to: "[NSBundle mainBundle]"),
@@ -91,6 +102,8 @@ let package = Package(
                 .headerSearchPath("llama.cpp/ggml/src/ggml-cpu"),
                 .define("GGML_USE_METAL"),
                 .define("GGML_USE_CPU"),
+                .define("GGML_VERSION", to: "\"0.9.7\""),
+                .define("GGML_COMMIT", to: "\"b8189\""),
             ],
             linkerSettings: [
                 .linkedFramework("Accelerate"),
@@ -128,7 +141,7 @@ let package = Package(
                 .headerSearchPath("llama.cpp/ggml/include"),
                 .headerSearchPath("llama.cpp/ggml/src"),
                 .headerSearchPath("llama.cpp/vendor"),
-                .unsafeFlags(["-Wno-cast-qual"]),
+                .unsafeFlags(["-Wno-cast-qual", "-UDEBUG"]),
             ],
             linkerSettings: [
                 .linkedLibrary("c++"),
