@@ -1,3 +1,12 @@
+# Xcode 26 beta workaround: duplicate .modulemap files in the SDK cause
+# "redefinition of module" errors with explicit modules enabled.
+xcode_major = begin
+  m = `xcrun xcodebuild -version 2>/dev/null`.to_s.match(/Xcode (\d+)/)
+  m ? m[1].to_i : 0
+rescue
+  0
+end
+
 Pod::Spec.new do |s|
   s.name = 'DustLlm'
   s.version = File.read(File.join(__dir__, 'VERSION')).strip
@@ -35,5 +44,6 @@ Pod::Spec.new do |s|
     'HEADER_SEARCH_PATHS' => '$(inherited) $(PODS_TARGET_SRCROOT)/native/llama.cpp/include $(PODS_TARGET_SRCROOT)/native/llama.cpp/ggml/include $(PODS_TARGET_SRCROOT)/native/llama.cpp/src $(PODS_TARGET_SRCROOT)/native/llama.cpp/ggml/src $(PODS_TARGET_SRCROOT)/native/llama.cpp/vendor',
     'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) GGML_USE_METAL=1 GGML_METAL_EMBED_LIBRARY=1'
   }
+  s.pod_target_xcconfig['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO' if xcode_major >= 26
   s.swift_version = '5.9'
 end
