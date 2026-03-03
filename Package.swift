@@ -70,6 +70,8 @@ let package = Package(
                 "llama.cpp/ggml/src/ggml-webgpu",
                 "llama.cpp/ggml/src/ggml-zdnn",
                 "llama.cpp/ggml/src/ggml-zendnn",
+                // Embedded Metal shader data — consumed by .incbin in .s, not compiled
+                "ggml-metal-embed/ggml-metal-embed.metaldata",
             ],
             sources: [
                 "llama.cpp/src",
