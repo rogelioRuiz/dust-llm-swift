@@ -35,6 +35,9 @@ public final class MLXEngine: @unchecked Sendable {
         }
         semaphore.wait()
 
+        if let loadError {
+            throw loadError
+        }
         guard let container = loadedContainer else {
             throw LlamaError.loadFailed(path: path)
         }
