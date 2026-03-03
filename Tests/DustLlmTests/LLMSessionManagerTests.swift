@@ -83,14 +83,15 @@ final class LLMSessionManagerTests: XCTestCase {
     }
 
     func testL1T4WrongFormatRejectedBeforeLoad() {
-        // The plugin layer rejects non-gguf formats before calling the session manager.
-        // Verify that all non-gguf formats would be rejected by the guard.
-        let accepted = DustModelFormat.gguf.rawValue
-        XCTAssertEqual(accepted, "gguf")
+        // The plugin layer rejects non-gguf/mlx formats before calling the session manager.
+        // Verify that all unsupported formats would be rejected by the guard.
+        let accepted: Set<String> = [DustModelFormat.gguf.rawValue, DustModelFormat.mlx.rawValue]
+        XCTAssertTrue(accepted.contains("gguf"))
+        XCTAssertTrue(accepted.contains("mlx"))
 
         let rejected: [DustModelFormat] = [.onnx, .coreml, .tflite, .custom]
         for format in rejected {
-            XCTAssertNotEqual(format.rawValue, accepted, "\(format) should be rejected")
+            XCTAssertFalse(accepted.contains(format.rawValue), "\(format) should be rejected")
         }
 
         // Verify the session factory is never invoked for a rejected format.

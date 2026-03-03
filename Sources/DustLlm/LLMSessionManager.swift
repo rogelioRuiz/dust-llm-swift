@@ -32,6 +32,18 @@ public final class LLMSessionManager: DustModelServer, @unchecked Sendable {
             self.sessionFactory = sessionFactory
         } else {
             self.sessionFactory = { path, modelId, config, priority in
+                #if canImport(MLXLLM)
+                if MLXModelDetector.isMLXModelDirectory(path) {
+                    let engine = try MLXEngine(path: path, config: config)
+                    return LlamaSession(
+                        sessionId: modelId,
+                        engine: engine,
+                        metadata: engine.metadata,
+                        priority: priority
+                    )
+                }
+                #endif
+
                 let context = try LlamaContext(path: path, config: config)
                 let visionEncoder = try Self.makeVisionEncoder(
                     for: context.metadata,
@@ -327,13 +339,21 @@ public final class LLMSessionManager: DustModelServer, @unchecked Sendable {
         path: String,
         modelId: String
     ) -> DustModelDescriptor {
-        let attributes = try? FileManager.default.attributesOfItem(atPath: path)
-        let sizeBytes = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
+        let isMLX = MLXModelDetector.isMLXModelDirectory(path)
+        let format: DustModelFormat = isMLX ? .mlx : .gguf
+
+        let sizeBytes: Int64
+        if isMLX {
+            sizeBytes = MLXModelDetector.directorySize(at: path)
+        } else {
+            let attributes = try? FileManager.default.attributesOfItem(atPath: path)
+            sizeBytes = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
+        }
 
         return DustModelDescriptor(
             id: modelId,
             name: modelId,
-            format: .gguf,
+            format: format,
             sizeBytes: sizeBytes,
             version: "legacy",
             url: path

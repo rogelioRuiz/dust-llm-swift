@@ -12,6 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/rogelioRuiz/dust-core-swift.git", from: "0.1.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "1.0.0"),
     ],
     targets: [
         .target(
@@ -155,6 +156,8 @@ let package = Package(
                 "llama",
                 "mtmd",
                 .product(name: "DustCore", package: "dust-core-swift"),
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
             ],
             path: "Sources/DustLlm"
         ),
