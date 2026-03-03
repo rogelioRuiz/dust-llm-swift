@@ -15,6 +15,12 @@ public final class MLXEngine: @unchecked Sendable {
     public init(path: String, config: LLMConfig) throws {
         self.modelPath = path
 
+        #if targetEnvironment(simulator)
+        throw LlamaError.unsupportedOperation(
+            detail: "MLX requires Metal GPU which is not available in the iOS Simulator. Use a physical device."
+        )
+        #endif
+
         let configuration = ModelConfiguration(
             directory: URL(fileURLWithPath: path)
         )
