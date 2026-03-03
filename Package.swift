@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "dust-llm-swift",
-    platforms: [.iOS(.v16), .macOS(.v14)],
+    platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(
             name: "DustLlm",
