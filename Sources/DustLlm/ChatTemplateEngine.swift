@@ -70,6 +70,16 @@ private final class ChatTemplateNamespace: @unchecked Sendable {
     }
 }
 
+private final class ChatTemplateMacro: @unchecked Sendable {
+    let params: [ChatTemplateMacroParam]
+    let body: [ChatTemplateNode]
+
+    init(params: [ChatTemplateMacroParam], body: [ChatTemplateNode]) {
+        self.params = params
+        self.body = body
+    }
+}
+
 private struct ChatTemplateIfClause {
     let condition: ChatTemplateExpression?
     let body: [ChatTemplateNode]
@@ -106,11 +116,17 @@ private indirect enum ChatTemplateExpression {
     case unary(ChatTemplateUnaryOperator, ChatTemplateExpression)
     case binary(ChatTemplateBinaryOperator, ChatTemplateExpression, ChatTemplateExpression)
     case isDefined(ChatTemplateExpression, negated: Bool)
+    case isTest(ChatTemplateExpression, String, negated: Bool)
     case member(ChatTemplateExpression, String)
     case subscriptAccess(ChatTemplateExpression, ChatTemplateExpression)
     case slice(ChatTemplateExpression, start: ChatTemplateExpression?)
     case call(ChatTemplateExpression, [ChatTemplateCallArgument])
     case filter(ChatTemplateExpression, String)
+}
+
+private struct ChatTemplateMacroParam {
+    let name: String
+    let defaultValue: ChatTemplateExpression?
 }
 
 private indirect enum ChatTemplateNode {
@@ -120,6 +136,7 @@ private indirect enum ChatTemplateNode {
     case conditional([ChatTemplateIfClause])
     case setVariable(name: String, value: ChatTemplateExpression)
     case setAttribute(target: String, attribute: String, value: ChatTemplateExpression)
+    case macro(name: String, params: [ChatTemplateMacroParam], body: [ChatTemplateNode])
 }
 
 private final class ChatTemplateParser {
@@ -176,6 +193,9 @@ private final class ChatTemplateParser {
                     nodes.append(node)
                 case "set":
                     let node = try parseSetStatement(statement)
+                    nodes.append(node)
+                case "macro":
+                    let node = try parseMacroStatement(statement)
                     nodes.append(node)
                 default:
                     throw ChatTemplateError.syntax("Unsupported statement: \(statement)")
@@ -285,6 +305,104 @@ private final class ChatTemplateParser {
         }
 
         return .setVariable(name: target, value: value)
+    }
+
+    private func parseMacroStatement(_ statement: String) throws -> ChatTemplateNode {
+        let remainder = String(statement.dropFirst("macro".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let parenOpen = remainder.firstIndex(of: "(") else {
+            throw ChatTemplateError.syntax("Invalid macro statement: \(statement)")
+        }
+        guard remainder.last == ")" else {
+            throw ChatTemplateError.syntax("Invalid macro statement: \(statement)")
+        }
+
+        let name = String(remainder[..<parenOpen]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isValidIdentifier(name) else {
+            throw ChatTemplateError.syntax("Invalid macro name: \(name)")
+        }
+
+        let paramsStart = remainder.index(after: parenOpen)
+        let paramsEnd = remainder.index(before: remainder.endIndex)
+        let paramsString = String(remainder[paramsStart..<paramsEnd]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var params: [ChatTemplateMacroParam] = []
+        if !paramsString.isEmpty {
+            let paramParts = splitMacroParams(paramsString)
+            for part in paramParts {
+                let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let equalsIndex = trimmed.firstIndex(of: "=") {
+                    let paramName = String(trimmed[..<equalsIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let defaultSource = String(trimmed[trimmed.index(after: equalsIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard isValidIdentifier(paramName) else {
+                        throw ChatTemplateError.syntax("Invalid macro parameter: \(paramName)")
+                    }
+                    let defaultExpr = try ChatTemplateExpressionParser(source: defaultSource).parse()
+                    params.append(ChatTemplateMacroParam(name: paramName, defaultValue: defaultExpr))
+                } else {
+                    guard isValidIdentifier(trimmed) else {
+                        throw ChatTemplateError.syntax("Invalid macro parameter: \(trimmed)")
+                    }
+                    params.append(ChatTemplateMacroParam(name: trimmed, defaultValue: nil))
+                }
+            }
+        }
+
+        let (body, terminator) = try parseNodes(until: ["endmacro"])
+        guard terminator != nil else {
+            throw ChatTemplateError.syntax("Missing endmacro")
+        }
+
+        return .macro(name: name, params: params, body: body)
+    }
+
+    private func splitMacroParams(_ value: String) -> [String] {
+        var parts: [String] = []
+        var current = ""
+        var parenDepth = 0
+        var quote: Character?
+
+        for character in value {
+            if let q = quote {
+                current.append(character)
+                if character == q {
+                    quote = nil
+                }
+                continue
+            }
+
+            if character == "'" || character == "\"" {
+                quote = character
+                current.append(character)
+                continue
+            }
+
+            if character == "(" {
+                parenDepth += 1
+                current.append(character)
+                continue
+            }
+
+            if character == ")" {
+                parenDepth -= 1
+                current.append(character)
+                continue
+            }
+
+            if character == "," && parenDepth == 0 {
+                parts.append(current)
+                current = ""
+                continue
+            }
+
+            current.append(character)
+        }
+
+        if !current.isEmpty {
+            parts.append(current)
+        }
+
+        return parts
     }
 
     private func readText() -> String {
@@ -696,10 +814,21 @@ private final class ChatTemplateExpressionParser {
 
             if matchIdentifier("is") {
                 let negated = matchIdentifier("not")
-                guard matchIdentifier("defined") else {
-                    throw ChatTemplateError.syntax("Expected 'defined' after 'is'")
+                if matchIdentifier("defined") {
+                    expression = .isDefined(expression, negated: negated)
+                } else if matchIdentifier("none") {
+                    expression = .isTest(expression, "none", negated: negated)
+                } else if matchIdentifier("undefined") {
+                    expression = .isTest(expression, "undefined", negated: negated)
+                } else if matchIdentifier("string") {
+                    expression = .isTest(expression, "string", negated: negated)
+                } else if matchIdentifier("true") {
+                    expression = .isTest(expression, "true", negated: negated)
+                } else if matchIdentifier("false") {
+                    expression = .isTest(expression, "false", negated: negated)
+                } else {
+                    throw ChatTemplateError.syntax("Unknown test after 'is'")
                 }
-                expression = .isDefined(expression, negated: negated)
                 continue
             }
 
@@ -905,6 +1034,8 @@ private final class ChatTemplateEvaluator {
                     throw ChatTemplateError.runtime("Variable '\(target)' is not a namespace")
                 }
                 namespace.values[attribute] = try evaluate(value)
+            case .macro(let name, let params, let body):
+                scopes[scopes.count - 1][name] = ChatTemplateMacro(params: params, body: body)
             }
         }
     }
@@ -962,6 +1093,24 @@ private final class ChatTemplateEvaluator {
         case .isDefined(let wrapped, let negated):
             let isDefined = !isUndefined(try evaluate(wrapped))
             return negated ? !isDefined : isDefined
+        case .isTest(let wrapped, let testName, let negated):
+            let value = try evaluate(wrapped)
+            let result: Bool
+            switch testName {
+            case "none":
+                result = isUndefined(value) || value is NSNull
+            case "undefined":
+                result = isUndefined(value)
+            case "string":
+                result = !isUndefined(value) && value is String
+            case "true":
+                result = (value as? Bool) == true
+            case "false":
+                result = (value as? Bool) == false
+            default:
+                throw ChatTemplateError.runtime("Unknown test: \(testName)")
+            }
+            return negated ? !result : result
         case .member(let base, let name):
             return try member(named: name, on: try evaluate(base))
         case .subscriptAccess(let base, let index):
@@ -1156,6 +1305,12 @@ private final class ChatTemplateEvaluator {
     }
 
     private func callBuiltin(named name: String, arguments: [ChatTemplateCallArgument]) throws -> Any {
+        // Check for user-defined macros first
+        let resolved = lookup(name)
+        if let macro = resolved as? ChatTemplateMacro {
+            return try callMacro(macro, arguments: arguments)
+        }
+
         switch name {
         case "raise_exception":
             let messageExpression = try requirePositionalArguments(arguments, expected: 1)[0]
@@ -1192,6 +1347,43 @@ private final class ChatTemplateEvaluator {
         default:
             throw ChatTemplateError.runtime("Unknown function: \(name)")
         }
+    }
+
+    private func callMacro(_ macro: ChatTemplateMacro, arguments: [ChatTemplateCallArgument]) throws -> Any {
+        var scope: [String: Any] = [:]
+
+        // Separate positional and named arguments
+        var positionalArgs: [ChatTemplateExpression] = []
+        var namedArgs: [String: ChatTemplateExpression] = [:]
+        for argument in arguments {
+            switch argument {
+            case .positional(let expr):
+                positionalArgs.append(expr)
+            case .named(let name, let expr):
+                namedArgs[name] = expr
+            }
+        }
+
+        // Bind parameters
+        for (paramIndex, param) in macro.params.enumerated() {
+            if paramIndex < positionalArgs.count {
+                scope[param.name] = try evaluate(positionalArgs[paramIndex])
+            } else if let namedExpr = namedArgs[param.name] {
+                scope[param.name] = try evaluate(namedExpr)
+            } else if let defaultExpr = param.defaultValue {
+                scope[param.name] = try evaluate(defaultExpr)
+            } else {
+                throw ChatTemplateError.runtime("Missing argument for macro parameter: \(param.name)")
+            }
+        }
+
+        // Render body in new scope
+        pushScope(scope)
+        var output = ""
+        try render(macro.body, into: &output)
+        popScope()
+
+        return output
     }
 
     private func callMethod(named name: String, on base: Any, arguments: [ChatTemplateCallArgument]) throws -> Any {
