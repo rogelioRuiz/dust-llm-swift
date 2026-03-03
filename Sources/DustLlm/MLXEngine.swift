@@ -17,7 +17,7 @@ public final class MLXEngine: @unchecked Sendable {
 
         #if targetEnvironment(simulator)
         throw LlamaError.unsupportedOperation(
-            detail: "MLX requires Metal GPU which is not available in the iOS Simulator. Use a physical device."
+            "MLX requires Metal GPU which is not available in the iOS Simulator. Use a physical device."
         )
         #endif
 
