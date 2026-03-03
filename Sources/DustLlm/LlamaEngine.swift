@@ -88,16 +88,16 @@ public struct GenerateResult: Equatable, Sendable {
 }
 
 extension LlamaEngine {
-    func getEmbedding(tokens: [Int32]) throws -> [Float] {
+    public func getEmbedding(tokens: [Int32]) throws -> [Float] {
         _ = tokens
         throw LlamaError.unsupportedOperation("embedding extraction is not available for this engine")
     }
 
-    var embeddingDims: Int {
+    public var embeddingDims: Int {
         0
     }
 
-    func generateWithVision(
+    public func generateWithVision(
         promptTokens: [Int32],
         imageEmbedding: ImageEmbedding,
         visionEncoder: VisionEncoderProtocol,
@@ -112,7 +112,7 @@ extension LlamaEngine {
         throw LlamaError.unsupportedOperation("vision generation is not available for this engine")
     }
 
-    func generateStreamingWithVision(
+    public func generateStreamingWithVision(
         promptTokens: [Int32],
         imageEmbedding: ImageEmbedding,
         visionEncoder: VisionEncoderProtocol,
