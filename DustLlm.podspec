@@ -49,11 +49,12 @@ Pod::Spec.new do |s|
 
   s.dependency 'DustCore'
   s.frameworks = ['Accelerate', 'Metal', 'MetalKit']
-  s.pod_target_xcconfig = {
+  xcconfig = {
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'HEADER_SEARCH_PATHS' => '$(inherited) $(PODS_TARGET_SRCROOT)/native/llama.cpp/include $(PODS_TARGET_SRCROOT)/native/llama.cpp/ggml/include $(PODS_TARGET_SRCROOT)/native/llama.cpp/src $(PODS_TARGET_SRCROOT)/native/llama.cpp/ggml/src $(PODS_TARGET_SRCROOT)/native/llama.cpp/vendor $(PODS_TARGET_SRCROOT)/native/llama.cpp/tools/mtmd',
     'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) GGML_USE_METAL=1 GGML_METAL_EMBED_LIBRARY=1 GGML_VERSION=\"0.9.7\" GGML_COMMIT=\"b8189\"'
   }
-  s.pod_target_xcconfig['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO' if xcode_major >= 26
+  xcconfig['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO' if xcode_major >= 26
+  s.pod_target_xcconfig = xcconfig
   s.swift_version = '5.9'
 end

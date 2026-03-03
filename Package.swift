@@ -53,7 +53,7 @@ let package = Package(
                 "llama.cpp/ggml/src/ggml-cpu/arch/wasm",
                 "llama.cpp/ggml/src/ggml-cpu/arch/x86",
                 "llama.cpp/ggml/src/ggml-metal/CMakeLists.txt",
-                // Metal shader — excluded from sources, added as resource below
+                // Metal shader — excluded; embedded via ggml-metal-embed instead
                 "llama.cpp/ggml/src/ggml-metal/ggml-metal.metal",
                 // Non-Metal GPU backends
                 "llama.cpp/ggml/src/ggml-blas",
@@ -74,9 +74,7 @@ let package = Package(
             sources: [
                 "llama.cpp/src",
                 "llama.cpp/ggml/src",
-            ],
-            resources: [
-                .copy("llama.cpp/ggml/src/ggml-metal/ggml-metal.metal"),
+                "ggml-metal-embed",
             ],
             publicHeadersPath: "llama-spm-headers",
             cSettings: [
@@ -87,11 +85,9 @@ let package = Package(
                 .headerSearchPath("llama.cpp/ggml/src/ggml-cpu"),
                 .define("GGML_USE_METAL"),
                 .define("GGML_USE_CPU"),
+                .define("GGML_METAL_EMBED_LIBRARY"),
                 .define("GGML_VERSION", to: "\"0.9.7\""),
                 .define("GGML_COMMIT", to: "\"b8189\""),
-                // SPM defines SWIFT_PACKAGE but doesn't generate SWIFTPM_MODULE_BUNDLE for C targets.
-                // ggml-metal.m uses it to find the Metal shader at runtime — fall back to mainBundle.
-                .define("SWIFTPM_MODULE_BUNDLE", to: "[NSBundle mainBundle]"),
                 .unsafeFlags(["-fno-objc-arc"]),
             ],
             cxxSettings: [
@@ -102,6 +98,7 @@ let package = Package(
                 .headerSearchPath("llama.cpp/ggml/src/ggml-cpu"),
                 .define("GGML_USE_METAL"),
                 .define("GGML_USE_CPU"),
+                .define("GGML_METAL_EMBED_LIBRARY"),
                 .define("GGML_VERSION", to: "\"0.9.7\""),
                 .define("GGML_COMMIT", to: "\"b8189\""),
             ],
