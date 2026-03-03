@@ -126,6 +126,8 @@ let package = Package(
                 "llama.cpp/tools/mtmd/test-1.jpeg",
                 "llama.cpp/tools/mtmd/test-2.mp3",
                 "llama.cpp/tools/mtmd/README.md",
+                // Prevent Xcode from auto-compiling Metal shader (embedded in llama target)
+                "llama.cpp/ggml/src/ggml-metal/ggml-metal.metal",
             ],
             sources: [
                 "llama.cpp/tools/mtmd/clip.cpp",
