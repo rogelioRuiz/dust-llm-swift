@@ -15,6 +15,7 @@
   <a href="https://swift.org"><img alt="Swift" src="https://img.shields.io/badge/Swift-5.9-orange.svg"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/Platforms-iOS_16+_|_macOS_14+-lightgrey">
   <img alt="GGUF" src="https://img.shields.io/badge/GGUF-llama.cpp-blueviolet">
+  <img alt="MLX" src="https://img.shields.io/badge/MLX-Apple_Silicon-green">
   <a href="https://github.com/rogelioRuiz/dust-llm-swift/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/rogelioRuiz/dust-llm-swift/actions/workflows/ci.yml/badge.svg?branch=main"></a>
 </p>
 
@@ -45,13 +46,18 @@
 
 # dust-llm-swift
 
-GGUF/llama.cpp inference and chat runtime for Dust — iOS/macOS with Metal GPU acceleration.
+Dual-backend LLM inference for Dust — GGUF via llama.cpp and MLX for Apple Silicon. iOS/macOS with Metal GPU acceleration.
 
 **Version: 0.1.0**
 
 ## Overview
 
-Provides a Swift-native API for running GGUF large language models via llama.cpp with Metal acceleration. Builds on [dust-core-swift](../dust-core-swift). Requires iOS 16+ / macOS 14+ (Metal).
+Provides a Swift-native API for running large language models on-device with two backends:
+
+- **GGUF/llama.cpp** — Works on all iOS 16+ / macOS 14+ devices. CPU + Metal GPU acceleration.
+- **MLX** — Optimized for Apple Silicon (iPhone, iPad, Mac). Requires iOS 17+ / macOS 14+ with Metal GPU. Uses [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) for model loading and inference.
+
+The backend is selected automatically based on model format: directories containing `config.json` + `.safetensors` files use MLX; `.gguf` files use llama.cpp. Builds on [dust-core-swift](../dust-core-swift).
 
 ```
 dust-llm-swift/
@@ -59,12 +65,14 @@ dust-llm-swift/
 ├── DustLlm.podspec                        # CocoaPods spec (module name: DustLlm)
 ├── native/llama.cpp/                       # llama.cpp submodule (clone with --recursive)
 ├── Sources/DustLlm/
-│   ├── LlamaEngine.swift
-│   ├── ChatSession.swift
-│   ├── GenerationSession.swift
-│   ├── StreamingHandler.swift
-│   ├── VisionProcessor.swift
-│   └── LlmRegistry.swift
+│   ├── LlamaEngine.swift                   # Protocol for inference backends
+│   ├── LlamaContext.swift                  # GGUF/llama.cpp backend
+│   ├── MLXEngine.swift                     # MLX backend (Apple Silicon)
+│   ├── MLXModelDetector.swift              # Auto-detects MLX model directories
+│   ├── LLMSessionManager.swift             # Dual-backend routing + session cache
+│   ├── LlamaSession.swift                  # Unified session (works with either backend)
+│   ├── ChatTemplateEngine.swift            # Jinja2 subset renderer
+│   └── VisionEncoder.swift                 # CLIP/LLaVA multimodal
 └── Tests/DustLlmTests/
     └── Fixtures/
         └── tiny-test.gguf                  # Minimal model for integration tests
@@ -108,28 +116,41 @@ pod 'DustLlm', '~> 0.1'
 ## Dependencies
 
 - [dust-core-swift](../dust-core-swift) (DustCore)
+- [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) (MLXLLM, MLXLMCommon — conditionally compiled via `#if canImport(MLXLLM)`)
 
 ## Usage
+
+### GGUF model (llama.cpp)
 
 ```swift
 import DustLlm
 
-// 1. Load a GGUF model
-let engine = try LlamaEngine(modelPath: modelURL, nThreads: 4)
-
-// 2. Start a chat session
-let chat = ChatSession(engine: engine, systemPrompt: "You are a helpful assistant.")
-let reply = try await chat.send("What is 2 + 2?")
-
-// 3. Or stream tokens
-let gen = GenerationSession(engine: engine) { token in
-    print(token, terminator: "")
-}
-try await gen.generate("Once upon a time")
-
-// 4. Clean up
-engine.close()
+let manager = LLMSessionManager()
+let session = try manager.loadModel(
+    path: "/path/to/model.gguf",
+    modelId: "qwen",
+    config: LLMConfig(contextSize: 2048, nGpuLayers: -1),
+    priority: .interactive
+)
 ```
+
+### MLX model (Apple Silicon)
+
+```swift
+import DustLlm
+
+// MLX models are directories with config.json + .safetensors files
+// Backend is selected automatically — same API as GGUF
+let manager = LLMSessionManager()
+let session = try manager.loadModel(
+    path: "/path/to/Qwen3.5-2B-8bit/",  // directory, not a file
+    modelId: "qwen-mlx",
+    config: LLMConfig(contextSize: 2048),
+    priority: .interactive
+)
+```
+
+Both backends expose the same `LlamaSession` API for tokenization, generation, streaming, and chat.
 
 ## Test
 
