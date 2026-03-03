@@ -16,7 +16,6 @@ public final class MLXEngine: @unchecked Sendable {
         self.modelPath = path
 
         let configuration = ModelConfiguration(
-            id: path,
             directory: URL(fileURLWithPath: path)
         )
 
