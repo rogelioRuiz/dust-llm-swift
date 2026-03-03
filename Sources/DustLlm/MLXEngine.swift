@@ -162,39 +162,45 @@ extension MLXEngine: LlamaEngine {
     ) throws -> StopReason {
         let params = Self.mapParameters(sampler, maxTokens: maxTokens)
 
-        let reason: StopReason = try syncPerform { ctx in
-            let input = try Self.tokensToLMInput(promptTokens, context: ctx)
-            var count = 0
-            var stopReason: StopReason = .maxTokens
+        // withoutActuallyEscaping is safe here because syncPerform blocks
+        // until the closure completes (semaphore-based synchronous bridge).
+        return try withoutActuallyEscaping(isCancelled) { escapableIsCancelled in
+            try withoutActuallyEscaping(onToken) { escapableOnToken in
+                let reason: StopReason = try syncPerform { ctx in
+                    let input = try Self.tokensToLMInput(promptTokens, context: ctx)
+                    var count = 0
+                    var stopReason: StopReason = .maxTokens
 
-            _ = try MLXLMCommon.generate(
-                input: input,
-                parameters: params,
-                context: ctx
-            ) { tokens in
-                guard let last = tokens.last else { return .more }
-                let token = Int32(last)
-                count += 1
+                    _ = try MLXLMCommon.generate(
+                        input: input,
+                        parameters: params,
+                        context: ctx
+                    ) { tokens in
+                        guard let last = tokens.last else { return .more }
+                        let token = Int32(last)
+                        count += 1
 
-                if let eosId = ctx.tokenizer.eosTokenId, last == eosId {
-                    stopReason = .eos
-                    return .stop
+                        if let eosId = ctx.tokenizer.eosTokenId, last == eosId {
+                            stopReason = .eos
+                            return .stop
+                        }
+
+                        escapableOnToken(token)
+
+                        if escapableIsCancelled() {
+                            stopReason = .cancelled
+                            return .stop
+                        }
+
+                        return count >= maxTokens ? .stop : .more
+                    }
+
+                    return stopReason
                 }
 
-                onToken(token)
-
-                if isCancelled() {
-                    stopReason = .cancelled
-                    return .stop
-                }
-
-                return count >= maxTokens ? .stop : .more
+                return reason
             }
-
-            return stopReason
         }
-
-        return reason
     }
 
     private static func tokensToLMInput(_ tokens: [Int32], context: ModelContext) throws -> LMInput {
