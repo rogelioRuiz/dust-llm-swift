@@ -85,6 +85,7 @@ let package = Package(
                 .headerSearchPath("llama.cpp/src"),
                 .headerSearchPath("llama.cpp/ggml/src"),
                 .headerSearchPath("llama.cpp/ggml/src/ggml-cpu"),
+                .headerSearchPath("ggml-metal-embed"),
                 .define("GGML_USE_METAL"),
                 .define("GGML_USE_CPU"),
                 .define("GGML_METAL_EMBED_LIBRARY"),
