@@ -180,11 +180,13 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
 
     public func applyTemplate(
         messages: [ChatMessage],
-        addGenerationPrompt: Bool
+        addGenerationPrompt: Bool,
+        enableThinking: Bool? = nil
     ) throws -> (prompt: String, tokenCount: Int) {
         let prompt = try templateEngine.apply(
             messages: messages,
-            addGenerationPrompt: addGenerationPrompt
+            addGenerationPrompt: addGenerationPrompt,
+            enableThinking: enableThinking
         )
         let tokens = try tokenize(text: prompt, addSpecial: true)
         return (prompt, tokens.count)
@@ -194,7 +196,8 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
         messages: [ChatMessage],
         maxTokens: Int,
         stopSequences: [String],
-        sampler: SamplerConfig
+        sampler: SamplerConfig,
+        enableThinking: Bool? = nil
     ) throws -> (result: GenerateResult, contextUsed: Int) {
         let engine = try activeEngine()
         let history = snapshotChatMessages()
@@ -207,7 +210,8 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
 
         let prompt = try templateEngine.apply(
             messages: allMessages,
-            addGenerationPrompt: true
+            addGenerationPrompt: true,
+            enableThinking: enableThinking
         )
         let result = try generate(
             prompt: prompt,
@@ -219,7 +223,8 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
         let updatedHistory = allMessages + [ChatMessage(role: "assistant", content: result.text)]
         let fullPrompt = try templateEngine.apply(
             messages: updatedHistory,
-            addGenerationPrompt: false
+            addGenerationPrompt: false,
+            enableThinking: enableThinking
         )
         let updatedContextUsed = try countTokens(text: fullPrompt)
 

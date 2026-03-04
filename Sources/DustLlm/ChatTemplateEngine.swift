@@ -23,11 +23,12 @@ public final class ChatTemplateEngine {
         messages: [ChatMessage],
         addGenerationPrompt: Bool,
         bosToken: String = "",
-        eosToken: String = ""
+        eosToken: String = "",
+        enableThinking: Bool? = nil
     ) throws -> String {
         let parser = ChatTemplateParser(template: templateString)
         let nodes = try parser.parse()
-        let rootContext: [String: Any] = [
+        var rootContext: [String: Any] = [
             "messages": messages.map { message in
                 [
                     "role": message.role,
@@ -38,6 +39,9 @@ public final class ChatTemplateEngine {
             "bos_token": bosToken,
             "eos_token": eosToken,
         ]
+        if let enableThinking {
+            rootContext["enable_thinking"] = enableThinking
+        }
 
         return try ChatTemplateEvaluator(rootContext: rootContext).render(nodes)
     }
