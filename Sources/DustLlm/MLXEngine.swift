@@ -13,6 +13,7 @@ public final class MLXEngine: @unchecked Sendable {
     private let modelPath: String
     private let contextSize: UInt32
     private let eosId: Int32
+    private let isVLM: Bool
     public let metadata: LLMModelMetadata
 
     public init(path: String, config: LLMConfig) throws {
@@ -65,6 +66,7 @@ public final class MLXEngine: @unchecked Sendable {
             throw LlamaError.loadFailed(path: path)
         }
         self.container = container
+        self.isVLM = isVLM
 
         // Read EOS token from container
         var resolvedEos: Int32 = -1
@@ -100,6 +102,27 @@ public final class MLXEngine: @unchecked Sendable {
             do {
                 result = try await container.perform { ctx in
                     try action(ctx)
+                }
+            } catch {
+                caught = error
+            }
+            semaphore.signal()
+        }
+        semaphore.wait()
+
+        if let caught { throw caught }
+        return result!
+    }
+
+    private func syncPerformAsync<R>(_ action: @Sendable @escaping (ModelContext) async throws -> R) throws -> R {
+        var result: R?
+        var caught: Error?
+        let semaphore = DispatchSemaphore(value: 0)
+
+        Task {
+            do {
+                result = try await container.perform { ctx in
+                    try await action(ctx)
                 }
             } catch {
                 caught = error
@@ -152,9 +175,16 @@ extension MLXEngine: LlamaEngine {
         sampler: SamplerConfig
     ) throws -> (tokens: [Int32], stopReason: StopReason) {
         let params = Self.mapParameters(sampler, maxTokens: maxTokens)
+        let useVLM = isVLM
 
-        let result: (tokens: [Int32], stopReason: StopReason) = try syncPerform { ctx in
-            let input = try Self.tokensToLMInput(promptTokens, context: ctx)
+        let result: (tokens: [Int32], stopReason: StopReason) = try syncPerformAsync { ctx in
+            let input: LMInput
+            if useVLM {
+                let text = ctx.tokenizer.decode(tokens: promptTokens.map { Int($0) })
+                input = try await ctx.processor.prepare(input: UserInput(prompt: text))
+            } else {
+                input = LMInput(tokens: MLXArray(promptTokens.map { Int32($0) }))
+            }
             var generatedTokens: [Int32] = []
             var reason: StopReason = .maxTokens
 
@@ -187,13 +217,20 @@ extension MLXEngine: LlamaEngine {
         onToken: (Int32) -> Void
     ) throws -> StopReason {
         let params = Self.mapParameters(sampler, maxTokens: maxTokens)
+        let useVLM = isVLM
 
-        // withoutActuallyEscaping is safe here because syncPerform blocks
+        // withoutActuallyEscaping is safe here because syncPerformAsync blocks
         // until the closure completes (semaphore-based synchronous bridge).
         return try withoutActuallyEscaping(isCancelled) { escapableIsCancelled in
             try withoutActuallyEscaping(onToken) { escapableOnToken in
-                let reason: StopReason = try syncPerform { ctx in
-                    let input = try Self.tokensToLMInput(promptTokens, context: ctx)
+                let reason: StopReason = try syncPerformAsync { ctx in
+                    let input: LMInput
+                    if useVLM {
+                        let text = ctx.tokenizer.decode(tokens: promptTokens.map { Int($0) })
+                        input = try await ctx.processor.prepare(input: UserInput(prompt: text))
+                    } else {
+                        input = LMInput(tokens: MLXArray(promptTokens.map { Int32($0) }))
+                    }
                     var count = 0
                     var stopReason: StopReason = .maxTokens
 
@@ -227,11 +264,6 @@ extension MLXEngine: LlamaEngine {
                 return reason
             }
         }
-    }
-
-    private static func tokensToLMInput(_ tokens: [Int32], context: ModelContext) throws -> LMInput {
-        let mlxTokens = MLXArray(tokens.map { Int32($0) })
-        return LMInput(tokens: mlxTokens)
     }
 }
 #endif
