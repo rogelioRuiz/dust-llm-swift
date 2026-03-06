@@ -7,7 +7,7 @@ public enum MemoryPressureLevel {
 }
 
 public final class LLMSessionManager: DustModelServer, @unchecked Sendable {
-    public typealias SessionFactory = @Sendable (_ path: String, _ modelId: String, _ config: LLMConfig, _ priority: DustSessionPriority) throws -> LlamaSession
+    public typealias SessionFactory = @Sendable (_ path: String, _ modelId: String, _ config: LLMConfig, _ priority: DustSessionPriority, _ format: DustModelFormat) throws -> LlamaSession
     public typealias VisionEncoderFactory = @Sendable (_ mmprojPath: String, _ model: OpaquePointer) throws -> VisionEncoderProtocol
 
     public static let inferenceQueue = DispatchQueue(
@@ -31,9 +31,10 @@ public final class LLMSessionManager: DustModelServer, @unchecked Sendable {
         if let sessionFactory {
             self.sessionFactory = sessionFactory
         } else {
-            self.sessionFactory = { path, modelId, config, priority in
+            self.sessionFactory = { path, modelId, config, priority, format in
                 #if canImport(MLXLLM)
-                if MLXModelDetector.isMLXModelDirectory(path) {
+                let isMLX = format == .mlx || (format != .gguf && MLXModelDetector.isMLXModelDirectory(path))
+                if isMLX {
                     let engine = try MLXEngine(path: path, config: config)
                     return LlamaSession(
                         sessionId: modelId,
@@ -134,7 +135,7 @@ public final class LLMSessionManager: DustModelServer, @unchecked Sendable {
             throw DustCoreError.invalidInput(detail: "descriptor.url or descriptor.metadata.localPath is required")
         }
 
-        let createdSession = try sessionFactory(path, descriptor.id, config, priority)
+        let createdSession = try sessionFactory(path, descriptor.id, config, priority, registeredDescriptor.format)
 
         var installedSession: LlamaSession?
         var discardedSession: LlamaSession?
@@ -167,9 +168,10 @@ public final class LLMSessionManager: DustModelServer, @unchecked Sendable {
         path: String,
         modelId: String,
         config: LLMConfig,
-        priority: DustSessionPriority
+        priority: DustSessionPriority,
+        format: DustModelFormat? = nil
     ) throws -> LlamaSession {
-        let descriptor = legacyDescriptor(path: path, modelId: modelId)
+        let descriptor = legacyDescriptor(path: path, modelId: modelId, format: format)
         register(descriptor: descriptor, config: config)
         setStatus(.ready, for: modelId)
 
@@ -337,9 +339,10 @@ public final class LLMSessionManager: DustModelServer, @unchecked Sendable {
 
     private func legacyDescriptor(
         path: String,
-        modelId: String
+        modelId: String,
+        format: DustModelFormat? = nil
     ) -> DustModelDescriptor {
-        let isMLX = MLXModelDetector.isMLXModelDirectory(path)
+        let isMLX = format == .mlx || (format == nil && MLXModelDetector.isMLXModelDirectory(path))
         let format: DustModelFormat = isMLX ? .mlx : .gguf
 
         let sizeBytes: Int64

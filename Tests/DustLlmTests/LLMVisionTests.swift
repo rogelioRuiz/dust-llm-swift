@@ -14,7 +14,7 @@ final class LLMVisionTests: XCTestCase {
         let mockEncoder = MockVisionEncoder()
 
         let manager = LLMSessionManager(
-            sessionFactory: { _, modelId, config, priority in
+            sessionFactory: { _, modelId, config, priority, _ in
                 let metadata = LLMModelMetadata(name: "vision-model", chatTemplate: nil, hasVision: true)
                 let encoder: VisionEncoderProtocol?
                 if metadata.hasVision {

@@ -13,7 +13,7 @@ final class LLMSessionManagerTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixtureURL.path))
 
         let manager = LLMSessionManager(
-            sessionFactory: { _, modelId, _, priority in
+            sessionFactory: { _, modelId, _, priority, _ in
                 LlamaSession(
                     sessionId: modelId,
                     metadata: LLMModelMetadata(
@@ -39,7 +39,7 @@ final class LLMSessionManagerTests: XCTestCase {
 
     func testL1T2LoadMissingFileThrowsPathInMessage() {
         let manager = LLMSessionManager(
-            sessionFactory: { path, _, _, _ in
+            sessionFactory: { path, _, _, _, _ in
                 throw LlamaError.fileNotFound(path: path)
             }
         )
@@ -68,7 +68,7 @@ final class LLMSessionManagerTests: XCTestCase {
         }
 
         let manager = LLMSessionManager(
-            sessionFactory: { path, _, _, _ in
+            sessionFactory: { path, _, _, _, _ in
                 throw LlamaError.loadFailed(path: path)
             }
         )
@@ -97,7 +97,7 @@ final class LLMSessionManagerTests: XCTestCase {
         // Verify the session factory is never invoked for a rejected format.
         let factoryCalled = Box(false)
         let manager = LLMSessionManager(
-            sessionFactory: { _, modelId, _, priority in
+            sessionFactory: { _, modelId, _, priority, _ in
                 factoryCalled.value = true
                 return LlamaSession(
                     sessionId: modelId,
@@ -113,7 +113,7 @@ final class LLMSessionManagerTests: XCTestCase {
     func testL1T5UnloadLoadedModelRemovesSession() async throws {
         let fixtureURL = try fixtureURL()
         let manager = LLMSessionManager(
-            sessionFactory: { _, modelId, _, priority in
+            sessionFactory: { _, modelId, _, priority, _ in
                 LlamaSession(
                     sessionId: modelId,
                     metadata: LLMModelMetadata(name: "tiny-test-model", chatTemplate: nil, hasVision: false),
@@ -150,7 +150,7 @@ final class LLMSessionManagerTests: XCTestCase {
     func testL1T7LoadingSameIdTwiceReusesSession() throws {
         let fixtureURL = try fixtureURL()
         let manager = LLMSessionManager(
-            sessionFactory: { _, modelId, _, priority in
+            sessionFactory: { _, modelId, _, priority, _ in
                 LlamaSession(
                     sessionId: modelId,
                     metadata: LLMModelMetadata(name: "tiny-test-model", chatTemplate: nil, hasVision: false),
@@ -179,7 +179,7 @@ final class LLMSessionManagerTests: XCTestCase {
     func testL1T8ConcurrentLoadTwoModelsSucceeds() async throws {
         let fixtureURL = try fixtureURL()
         let manager = LLMSessionManager(
-            sessionFactory: { _, modelId, _, priority in
+            sessionFactory: { _, modelId, _, priority, _ in
                 LlamaSession(
                     sessionId: modelId,
                     metadata: LLMModelMetadata(name: modelId, chatTemplate: nil, hasVision: false),

@@ -172,7 +172,7 @@ final class LLMRegistryTests: XCTestCase {
         engineFactory: ((DustSessionPriority) -> LlamaSession)? = nil
     ) -> LLMSessionManager {
         LLMSessionManager(
-            sessionFactory: { _, modelId, _, priority in
+            sessionFactory: { _, modelId, _, priority, _ in
                 if let engineFactory {
                     return engineFactory(priority)
                 }
