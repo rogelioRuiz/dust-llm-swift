@@ -3,6 +3,9 @@ import Foundation
 import MLX
 import MLXLLM
 import MLXLMCommon
+#if canImport(MLXVLM)
+import MLXVLM
+#endif
 
 @available(iOS 17.0, macOS 14.0, *)
 public final class MLXEngine: @unchecked Sendable {
@@ -25,15 +28,29 @@ public final class MLXEngine: @unchecked Sendable {
             directory: URL(fileURLWithPath: path)
         )
 
+        let isVLM = MLXModelDetector.isVLMModel(from: path)
+
         var loadedContainer: ModelContainer?
         var loadError: Error?
         let semaphore = DispatchSemaphore(value: 0)
 
         Task {
             do {
+                #if canImport(MLXVLM)
+                if isVLM {
+                    loadedContainer = try await VLMModelFactory.shared.loadContainer(
+                        configuration: configuration
+                    )
+                } else {
+                    loadedContainer = try await LLMModelFactory.shared.loadContainer(
+                        configuration: configuration
+                    )
+                }
+                #else
                 loadedContainer = try await LLMModelFactory.shared.loadContainer(
                     configuration: configuration
                 )
+                #endif
             } catch {
                 loadError = error
             }
@@ -67,7 +84,7 @@ public final class MLXEngine: @unchecked Sendable {
         self.metadata = LLMModelMetadata(
             name: name,
             chatTemplate: chatTemplate,
-            hasVision: false
+            hasVision: isVLM
         )
 
         let maxPos = MLXModelDetector.readMaxPositionEmbeddings(from: path)
