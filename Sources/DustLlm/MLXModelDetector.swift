@@ -58,6 +58,12 @@ public enum MLXModelDetector {
         return total
     }
 
+    /// Returns true if the model directory contains a VLM (vision_config in config.json).
+    public static func isVLMModel(from modelPath: String) -> Bool {
+        guard let json = readConfigJSON(from: modelPath) else { return false }
+        return json["vision_config"] != nil
+    }
+
     private static func readConfigJSON(from modelPath: String) -> [String: Any]? {
         let path = (modelPath as NSString).appendingPathComponent("config.json")
         guard let data = FileManager.default.contents(atPath: path),

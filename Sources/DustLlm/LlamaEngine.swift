@@ -149,7 +149,7 @@ extension LlamaContext: LlamaEngine {
         let vocab = llama_model_get_vocab(model)
         let textLength = Int32(text.utf8.count)
         let requiredCount = text.withCString { pointer in
-            llama_tokenize(vocab, pointer, textLength, nil, 0, addSpecial, false)
+            llama_tokenize(vocab, pointer, textLength, nil, 0, addSpecial, true)
         }
 
         let tokenCount = requiredCount < 0 ? -requiredCount : requiredCount
@@ -163,7 +163,7 @@ extension LlamaContext: LlamaEngine {
                     tokenBuffer.baseAddress,
                     Int32(tokenBuffer.count),
                     addSpecial,
-                    false
+                    true
                 )
             }
         }
@@ -202,7 +202,7 @@ extension LlamaContext: LlamaEngine {
                         textBuffer.baseAddress,
                         Int32(textBuffer.count),
                         false,
-                        false
+                        true
                     )
                 }
             }

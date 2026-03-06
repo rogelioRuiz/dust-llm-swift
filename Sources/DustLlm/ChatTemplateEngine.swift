@@ -830,6 +830,14 @@ private final class ChatTemplateExpressionParser {
                     expression = .isTest(expression, "true", negated: negated)
                 } else if matchIdentifier("false") {
                     expression = .isTest(expression, "false", negated: negated)
+                } else if matchIdentifier("mapping") {
+                    expression = .isTest(expression, "mapping", negated: negated)
+                } else if matchIdentifier("iterable") {
+                    expression = .isTest(expression, "iterable", negated: negated)
+                } else if matchIdentifier("sequence") {
+                    expression = .isTest(expression, "sequence", negated: negated)
+                } else if matchIdentifier("integer") || matchIdentifier("number") {
+                    expression = .isTest(expression, "number", negated: negated)
                 } else {
                     throw ChatTemplateError.syntax("Unknown test after 'is'")
                 }
@@ -1111,6 +1119,14 @@ private final class ChatTemplateEvaluator {
                 result = (value as? Bool) == true
             case "false":
                 result = (value as? Bool) == false
+            case "mapping":
+                result = !isUndefined(value) && value is [String: Any]
+            case "iterable":
+                result = !isUndefined(value) && (value is [Any] || value is [String: Any] || value is String)
+            case "sequence":
+                result = !isUndefined(value) && (value is [Any] || value is String)
+            case "number":
+                result = !isUndefined(value) && (value is Int || value is Double || value is Float)
             default:
                 throw ChatTemplateError.runtime("Unknown test: \(testName)")
             }

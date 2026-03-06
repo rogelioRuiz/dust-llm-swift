@@ -157,6 +157,7 @@ let package = Package(
                 "mtmd",
                 .product(name: "DustCore", package: "dust-core-swift"),
                 .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXVLM", package: "mlx-swift-lm"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
             ],
             path: "Sources/DustLlm"
