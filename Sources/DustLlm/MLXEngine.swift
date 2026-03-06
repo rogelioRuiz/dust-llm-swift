@@ -181,7 +181,7 @@ extension MLXEngine: LlamaEngine {
             let input: LMInput
             if useVLM {
                 let text = ctx.tokenizer.decode(tokens: promptTokens.map { Int($0) })
-                input = try await ctx.processor.prepare(input: UserInput(prompt: text))
+                input = try await ctx.processor.prepare(input: UserInput(prompt: .text(text)))
             } else {
                 input = LMInput(tokens: MLXArray(promptTokens.map { Int32($0) }))
             }
@@ -227,7 +227,7 @@ extension MLXEngine: LlamaEngine {
                     let input: LMInput
                     if useVLM {
                         let text = ctx.tokenizer.decode(tokens: promptTokens.map { Int($0) })
-                        input = try await ctx.processor.prepare(input: UserInput(prompt: text))
+                        input = try await ctx.processor.prepare(input: UserInput(prompt: .text(text)))
                     } else {
                         input = LMInput(tokens: MLXArray(promptTokens.map { Int32($0) }))
                     }
