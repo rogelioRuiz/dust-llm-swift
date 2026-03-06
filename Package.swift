@@ -12,7 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/rogelioRuiz/dust-core-swift.git", from: "0.1.0"),
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", branch: "main"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", revision: "6bb84aac13f76ca5e2c3ff312bc072977e684ff4"),
     ],
     targets: [
         .target(
