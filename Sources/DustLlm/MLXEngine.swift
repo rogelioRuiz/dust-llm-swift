@@ -29,7 +29,7 @@ public final class MLXEngine: @unchecked Sendable {
             directory: URL(fileURLWithPath: path)
         )
 
-        let isVLM = MLXModelDetector.isVLMModel(from: path)
+        var isVLM = false
 
         var loadedContainer: ModelContainer?
         var loadError: Error?
@@ -37,23 +37,31 @@ public final class MLXEngine: @unchecked Sendable {
 
         Task {
             do {
-                #if canImport(MLXVLM)
-                if isVLM {
-                    loadedContainer = try await VLMModelFactory.shared.loadContainer(
-                        configuration: configuration
-                    )
-                } else {
-                    loadedContainer = try await LLMModelFactory.shared.loadContainer(
-                        configuration: configuration
-                    )
-                }
-                #else
+                // Always try LLM first — it handles text-only inference for models
+                // like Qwen3.5 that have vision_config but also register as LLM.
+                // Loading as VLM unnecessarily initialises the vision encoder which
+                // can crash on memory-constrained devices (iPhone).
                 loadedContainer = try await LLMModelFactory.shared.loadContainer(
                     configuration: configuration
                 )
-                #endif
             } catch {
+                #if canImport(MLXVLM)
+                // LLM load failed — fall back to VLM if the model has vision_config.
+                if MLXModelDetector.isVLMModel(from: path) {
+                    do {
+                        loadedContainer = try await VLMModelFactory.shared.loadContainer(
+                            configuration: configuration
+                        )
+                        isVLM = true
+                    } catch {
+                        loadError = error
+                    }
+                } else {
+                    loadError = error
+                }
+                #else
                 loadError = error
+                #endif
             }
             semaphore.signal()
         }
