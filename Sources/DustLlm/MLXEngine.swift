@@ -175,16 +175,9 @@ extension MLXEngine: LlamaEngine {
         sampler: SamplerConfig
     ) throws -> (tokens: [Int32], stopReason: StopReason) {
         let params = Self.mapParameters(sampler, maxTokens: maxTokens)
-        let useVLM = isVLM
 
         let result: (tokens: [Int32], stopReason: StopReason) = try syncPerformAsync { ctx in
-            let input: LMInput
-            if useVLM {
-                let text = ctx.tokenizer.decode(tokens: promptTokens.map { Int($0) })
-                input = try await ctx.processor.prepare(input: UserInput(prompt: .text(text)))
-            } else {
-                input = LMInput(tokens: MLXArray(promptTokens.map { Int32($0) }))
-            }
+            let input = LMInput(tokens: MLXArray(promptTokens.map { Int32($0) }))
             var generatedTokens: [Int32] = []
             var reason: StopReason = .maxTokens
 
@@ -217,20 +210,13 @@ extension MLXEngine: LlamaEngine {
         onToken: (Int32) -> Void
     ) throws -> StopReason {
         let params = Self.mapParameters(sampler, maxTokens: maxTokens)
-        let useVLM = isVLM
 
         // withoutActuallyEscaping is safe here because syncPerformAsync blocks
         // until the closure completes (semaphore-based synchronous bridge).
         return try withoutActuallyEscaping(isCancelled) { escapableIsCancelled in
             try withoutActuallyEscaping(onToken) { escapableOnToken in
                 let reason: StopReason = try syncPerformAsync { ctx in
-                    let input: LMInput
-                    if useVLM {
-                        let text = ctx.tokenizer.decode(tokens: promptTokens.map { Int($0) })
-                        input = try await ctx.processor.prepare(input: UserInput(prompt: .text(text)))
-                    } else {
-                        input = LMInput(tokens: MLXArray(promptTokens.map { Int32($0) }))
-                    }
+                    let input = LMInput(tokens: MLXArray(promptTokens.map { Int32($0) }))
                     var count = 0
                     var stopReason: StopReason = .maxTokens
 

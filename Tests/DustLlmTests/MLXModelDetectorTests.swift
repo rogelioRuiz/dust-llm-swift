@@ -60,6 +60,35 @@ final class MLXModelDetectorTests: XCTestCase {
         XCTAssertEqual(MLXModelDetector.readChatTemplate(from: tempDir.path), template)
     }
 
+    func testReadChatTemplateFromArrayFormat() {
+        let template = "{% for msg in messages %}{{ msg.content }}{% endfor %}"
+        let json: [String: Any] = [
+            "chat_template": [
+                ["name": "default", "template": template],
+                ["name": "thinking", "template": "other"]
+            ]
+        ]
+        let data = try! JSONSerialization.data(withJSONObject: json)
+        let path = tempDir.appendingPathComponent("tokenizer_config.json").path
+        FileManager.default.createFile(atPath: path, contents: data)
+
+        XCTAssertEqual(MLXModelDetector.readChatTemplate(from: tempDir.path), template)
+    }
+
+    func testReadChatTemplateFromArrayFormatFallsBackToFirst() {
+        let template = "{% for msg in messages %}{{ msg.content }}{% endfor %}"
+        let json: [String: Any] = [
+            "chat_template": [
+                ["name": "thinking", "template": template]
+            ]
+        ]
+        let data = try! JSONSerialization.data(withJSONObject: json)
+        let path = tempDir.appendingPathComponent("tokenizer_config.json").path
+        FileManager.default.createFile(atPath: path, contents: data)
+
+        XCTAssertEqual(MLXModelDetector.readChatTemplate(from: tempDir.path), template)
+    }
+
     func testReadChatTemplateReturnsNilWhenMissing() {
         XCTAssertNil(MLXModelDetector.readChatTemplate(from: tempDir.path))
     }

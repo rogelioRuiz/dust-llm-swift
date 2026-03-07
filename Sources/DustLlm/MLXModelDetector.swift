@@ -21,14 +21,26 @@ public enum MLXModelDetector {
     }
 
     /// Reads chat_template from tokenizer_config.json if present.
+    /// Handles both string and array formats (Qwen3-style models use an array of
+    /// `{ name, template }` objects — we pick the "default" entry or the first one).
     public static func readChatTemplate(from modelPath: String) -> String? {
         let path = (modelPath as NSString).appendingPathComponent("tokenizer_config.json")
         guard let data = FileManager.default.contents(atPath: path),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let template = json["chat_template"] as? String else {
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
         }
-        return template
+
+        if let template = json["chat_template"] as? String {
+            return template
+        }
+
+        if let templates = json["chat_template"] as? [[String: Any]] {
+            let defaultEntry = templates.first { ($0["name"] as? String) == "default" }
+            let entry = defaultEntry ?? templates.first
+            return entry?["template"] as? String
+        }
+
+        return nil
     }
 
     /// Reads model name from config.json (_name_or_path or model_type).
