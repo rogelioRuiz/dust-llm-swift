@@ -3,6 +3,7 @@ import Foundation
 import MLX
 import MLXLLM
 import MLXLMCommon
+import Tokenizers
 #if canImport(MLXVLM)
 import MLXVLM
 #endif
@@ -15,6 +16,8 @@ public final class MLXEngine: @unchecked Sendable {
     private let eosId: Int32
     private let isVLM: Bool
     public let metadata: LLMModelMetadata
+    /// Cached tokenizer used to avoid re-entering the ModelContainer lock during generation.
+    private var cachedTokenizer: (any Tokenizer)?
 
     public init(path: String, config: LLMConfig) throws {
         self.modelPath = path
@@ -76,17 +79,19 @@ public final class MLXEngine: @unchecked Sendable {
         self.container = container
         self.isVLM = isVLM
 
-        // Read EOS token from container
+        // Read EOS token and cache tokenizer from container
         var resolvedEos: Int32 = -1
+        var resolvedTokenizer: (any Tokenizer)?
         let eosSema = DispatchSemaphore(value: 0)
         Task {
-            resolvedEos = Int32(await container.perform { ctx in
-                ctx.tokenizer.eosTokenId ?? -1
-            })
+            (resolvedEos, resolvedTokenizer) = await container.perform { ctx in
+                (Int32(ctx.tokenizer.eosTokenId ?? -1), ctx.tokenizer)
+            }
             eosSema.signal()
         }
         eosSema.wait()
         self.eosId = resolvedEos
+        self.cachedTokenizer = resolvedTokenizer
 
         // Read metadata from config files on disk
         let chatTemplate = MLXModelDetector.readChatTemplate(from: path)
@@ -161,16 +166,18 @@ extension MLXEngine: LlamaEngine {
     public var nCtx: UInt32 { contextSize }
 
     public func tokenize(text: String, addSpecial: Bool) throws -> [Int32] {
-        let tokens: [Int] = try syncPerform { ctx in
-            ctx.tokenizer.encode(text: text, addSpecialTokens: addSpecial)
+        guard let tokenizer = cachedTokenizer else {
+            throw LlamaError.loadFailed(path: modelPath)
         }
+        let tokens: [Int] = tokenizer.encode(text: text, addSpecialTokens: addSpecial)
         return tokens.map { Int32($0) }
     }
 
     public func detokenize(tokens: [Int32]) throws -> String {
-        try syncPerform { ctx in
-            ctx.tokenizer.decode(tokens: tokens.map { Int($0) })
+        guard let tokenizer = cachedTokenizer else {
+            throw LlamaError.loadFailed(path: modelPath)
         }
+        return tokenizer.decode(tokens: tokens.map { Int($0) })
     }
 
     public func vocabEosToken() -> Int32 { eosId }
