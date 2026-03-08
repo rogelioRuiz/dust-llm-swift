@@ -1,5 +1,8 @@
 import Foundation
 import DustCore
+import os.log
+
+private let sessionLog = OSLog(subsystem: "com.dust.llm", category: "LlamaSession")
 
 public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable {
     public let sessionId: String
@@ -375,7 +378,13 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
 
         do {
             let rawStopReason: StopReason
+            os_log(.info, log: sessionLog, "streamGenerate – imageData=%{public}@ supportsNativeImage=%{public}d messages=%{public}@ visionEncoder=%{public}@",
+                   imageData != nil ? "\(imageData!.count)B" : "nil",
+                   engine.supportsNativeImage ? 1 : 0,
+                   messages != nil ? "\(messages!.count) msgs" : "nil",
+                   visionEncoder != nil ? "yes" : "nil")
             if let imageData, engine.supportsNativeImage, let messages {
+                os_log(.info, log: sessionLog, "streamGenerate – taking NATIVE VLM path")
                 rawStopReason = try engine.generateStreamingWithNativeImage(
                     messages: messages,
                     imageData: imageData,

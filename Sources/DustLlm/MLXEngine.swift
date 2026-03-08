@@ -4,10 +4,13 @@ import Foundation
 import MLX
 import MLXLLM
 import MLXLMCommon
+import os.log
 import Tokenizers
 #if canImport(MLXVLM)
 import MLXVLM
 #endif
+
+private let mlxLog = OSLog(subsystem: "com.dust.llm", category: "MLXEngine")
 
 @available(iOS 17.0, macOS 14.0, *)
 public final class MLXEngine: @unchecked Sendable {
@@ -35,6 +38,7 @@ public final class MLXEngine: @unchecked Sendable {
 
         var isVLM = false
         let hasVisionConfig = MLXModelDetector.isVLMModel(from: path)
+        os_log(.info, log: mlxLog, "MLXEngine init – hasVisionConfig=%{public}d path=%{public}@", hasVisionConfig ? 1 : 0, path)
 
         var loadedContainer: ModelContainer?
         var loadError: Error?
@@ -43,32 +47,35 @@ public final class MLXEngine: @unchecked Sendable {
         Task {
             do {
                 #if canImport(MLXVLM)
+                os_log(.info, log: mlxLog, "MLXVLM is available")
                 if hasVisionConfig {
-                    // Models with vision_config (e.g. Qwen3.5 early-fusion VLMs)
-                    // must be loaded via VLMModelFactory so that ctx.processor can
-                    // handle image inputs.  Fall back to LLM if VLM load fails.
                     do {
+                        os_log(.info, log: mlxLog, "Attempting VLMModelFactory load...")
                         loadedContainer = try await VLMModelFactory.shared.loadContainer(
                             configuration: configuration
                         )
                         isVLM = true
+                        os_log(.info, log: mlxLog, "VLMModelFactory load SUCCEEDED – isVLM=true")
                     } catch {
-                        // VLM load failed — try LLM as fallback for text-only use.
+                        os_log(.error, log: mlxLog, "VLMModelFactory load FAILED: %{public}@  – falling back to LLM", String(describing: error))
                         loadedContainer = try await LLMModelFactory.shared.loadContainer(
                             configuration: configuration
                         )
                     }
                 } else {
+                    os_log(.info, log: mlxLog, "No vision config – loading via LLMModelFactory")
                     loadedContainer = try await LLMModelFactory.shared.loadContainer(
                         configuration: configuration
                     )
                 }
                 #else
+                os_log(.info, log: mlxLog, "MLXVLM NOT available – loading via LLMModelFactory")
                 loadedContainer = try await LLMModelFactory.shared.loadContainer(
                     configuration: configuration
                 )
                 #endif
             } catch {
+                os_log(.error, log: mlxLog, "Model load FAILED: %{public}@", String(describing: error))
                 loadError = error
             }
             semaphore.signal()
@@ -106,6 +113,7 @@ public final class MLXEngine: @unchecked Sendable {
             chatTemplate: chatTemplate,
             hasVision: isVLM
         )
+        os_log(.info, log: mlxLog, "MLXEngine ready – hasVision=%{public}d eosId=%{public}d ctxSize=%{public}d", isVLM ? 1 : 0, resolvedEos, Int32(maxPos ?? Int(config.contextSize)))
 
         let maxPos = MLXModelDetector.readMaxPositionEmbeddings(from: path)
         self.contextSize = UInt32(maxPos ?? Int(config.contextSize))
@@ -278,8 +286,19 @@ extension MLXEngine: LlamaEngine {
         messages: [[String: String]],
         imageData: Data
     ) -> UserInput {
-        let ciImage = CIImage(data: imageData)!
-        // Build Chat.Message array; attach image to the last user message.
+        os_log(.info, log: mlxLog, "buildUserInput – %{public}d messages, imageData=%{public}d bytes", messages.count, imageData.count)
+        guard let ciImage = CIImage(data: imageData) else {
+            os_log(.error, log: mlxLog, "buildUserInput – CIImage(data:) returned nil! imageData bytes=%{public}d", imageData.count)
+            // Return without image as fallback
+            let chatMessages = messages.map { msg in
+                Chat.Message(
+                    role: { switch msg["role"] ?? "user" { case "system": return .system; case "assistant": return .assistant; default: return .user } }(),
+                    content: msg["content"] ?? ""
+                )
+            }
+            return UserInput(chat: chatMessages)
+        }
+        os_log(.info, log: mlxLog, "buildUserInput – CIImage created: %.0fx%.0f", ciImage.extent.width, ciImage.extent.height)
         var chatMessages: [Chat.Message] = []
         let lastUserIndex = messages.lastIndex { ($0["role"] ?? "") == "user" }
         for (i, msg) in messages.enumerated() {
@@ -293,6 +312,7 @@ extension MLXEngine: LlamaEngine {
             }
             let images: [UserInput.Image] = (i == lastUserIndex) ? [.ciImage(ciImage)] : []
             chatMessages.append(Chat.Message(role: chatRole, content: content, images: images))
+            os_log(.info, log: mlxLog, "  msg[%{public}d] role=%{public}@ images=%{public}d content=%{public}@", i, role, images.count, String(content.prefix(80)))
         }
         return UserInput(chat: chatMessages)
     }
@@ -341,13 +361,16 @@ extension MLXEngine: LlamaEngine {
         isCancelled: () -> Bool,
         onToken: (Int32) -> Void
     ) throws -> StopReason {
+        os_log(.info, log: mlxLog, "generateStreamingWithNativeImage – msgs=%{public}d imgBytes=%{public}d maxTokens=%{public}d", messages.count, imageData.count, maxTokens)
         let params = Self.mapParameters(sampler, maxTokens: maxTokens)
         let userInput = Self.buildUserInput(messages: messages, imageData: imageData)
 
         return try withoutActuallyEscaping(isCancelled) { escapableIsCancelled in
             try withoutActuallyEscaping(onToken) { escapableOnToken in
                 let reason: StopReason = try syncPerformAsync { ctx in
+                    os_log(.info, log: mlxLog, "VLM processor.prepare – starting")
                     let input = try await ctx.processor.prepare(input: userInput)
+                    os_log(.info, log: mlxLog, "VLM processor.prepare – done, tokens=%{public}d", input.text.tokens.size)
 
                     var count = 0
                     var stopReason: StopReason = .maxTokens
