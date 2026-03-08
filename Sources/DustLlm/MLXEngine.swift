@@ -77,6 +77,12 @@ public final class MLXEngine: @unchecked Sendable {
             throw LlamaError.loadFailed(path: path)
         }
         self.container = container
+        // Early-fusion VLMs (e.g. Qwen3.5) load successfully via the LLM factory
+        // but still support vision.  Detect this from config.json so that hasVision
+        // is reported correctly even when the VLM fallback path was not taken.
+        if !isVLM && MLXModelDetector.isVLMModel(from: path) {
+            isVLM = true
+        }
         self.isVLM = isVLM
 
         // Read EOS token and cache tokenizer from container
