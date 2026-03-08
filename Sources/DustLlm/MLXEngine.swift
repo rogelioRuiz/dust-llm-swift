@@ -34,6 +34,7 @@ public final class MLXEngine: @unchecked Sendable {
         )
 
         var isVLM = false
+        let hasVisionConfig = MLXModelDetector.isVLMModel(from: path)
 
         var loadedContainer: ModelContainer?
         var loadError: Error?
@@ -41,31 +42,34 @@ public final class MLXEngine: @unchecked Sendable {
 
         Task {
             do {
-                // Always try LLM first — it handles text-only inference for models
-                // like Qwen3.5 that have vision_config but also register as LLM.
-                // Loading as VLM unnecessarily initialises the vision encoder which
-                // can crash on memory-constrained devices (iPhone).
-                loadedContainer = try await LLMModelFactory.shared.loadContainer(
-                    configuration: configuration
-                )
-            } catch {
                 #if canImport(MLXVLM)
-                // LLM load failed — fall back to VLM if the model has vision_config.
-                if MLXModelDetector.isVLMModel(from: path) {
+                if hasVisionConfig {
+                    // Models with vision_config (e.g. Qwen3.5 early-fusion VLMs)
+                    // must be loaded via VLMModelFactory so that ctx.processor can
+                    // handle image inputs.  Fall back to LLM if VLM load fails.
                     do {
                         loadedContainer = try await VLMModelFactory.shared.loadContainer(
                             configuration: configuration
                         )
                         isVLM = true
                     } catch {
-                        loadError = error
+                        // VLM load failed — try LLM as fallback for text-only use.
+                        loadedContainer = try await LLMModelFactory.shared.loadContainer(
+                            configuration: configuration
+                        )
                     }
                 } else {
-                    loadError = error
+                    loadedContainer = try await LLMModelFactory.shared.loadContainer(
+                        configuration: configuration
+                    )
                 }
                 #else
-                loadError = error
+                loadedContainer = try await LLMModelFactory.shared.loadContainer(
+                    configuration: configuration
+                )
                 #endif
+            } catch {
+                loadError = error
             }
             semaphore.signal()
         }
@@ -78,12 +82,6 @@ public final class MLXEngine: @unchecked Sendable {
             throw LlamaError.loadFailed(path: path)
         }
         self.container = container
-        // Early-fusion VLMs (e.g. Qwen3.5) load successfully via the LLM factory
-        // but still support vision.  Detect this from config.json so that hasVision
-        // is reported correctly even when the VLM fallback path was not taken.
-        if !isVLM && MLXModelDetector.isVLMModel(from: path) {
-            isVLM = true
-        }
         self.isVLM = isVLM
 
         // Read EOS token and cache tokenizer from container
