@@ -76,6 +76,30 @@ public enum MLXModelDetector {
         return json["vision_config"] != nil
     }
 
+    /// Ensures the tokenizer_config.json has a chat_template.
+    /// Some mlx-community model conversions (e.g. Qwen3.5-2B-8bit) omit the
+    /// chat_template from tokenizer_config.json, causing the VLM processor's
+    /// tokenizer.applyChatTemplate() to throw missingChatTemplate.
+    /// This method patches the file on disk so the tokenizer picks it up.
+    public static func ensureChatTemplate(at modelPath: String) {
+        let tokenizerConfigPath = (modelPath as NSString).appendingPathComponent("tokenizer_config.json")
+        guard let data = FileManager.default.contents(atPath: tokenizerConfigPath),
+              var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return
+        }
+        // Already has a chat_template — nothing to do
+        if json["chat_template"] != nil { return }
+
+        // Qwen VL ChatML template with vision tokens
+        let qwenVLTemplate = "{% set image_count = namespace(value=0) %}{% set video_count = namespace(value=0) %}{% for message in messages %}{% if loop.first and message['role'] != 'system' %}<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n{% endif %}<|im_start|>{{ message['role'] }}\n{% if message['content'] is string %}{{ message['content'] }}<|im_end|>\n{% else %}{% for content in message['content'] %}{% if content['type'] == 'image' %}{% set image_count.value = image_count.value + 1 %}{% if add_vision_id %}Picture {{ image_count.value }}: {% endif %}<|vision_start|><|image_pad|><|vision_end|>{% elif content['type'] == 'video' %}{% set video_count.value = video_count.value + 1 %}{% if add_vision_id %}Video {{ video_count.value }}: {% endif %}<|vision_start|><|video_pad|><|vision_end|>{% elif 'text' in content %}{{ content['text'] }}{% endif %}{% endfor %}<|im_end|>\n{% endif %}{% endfor %}{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}"
+
+        json["chat_template"] = qwenVLTemplate
+
+        if let updatedData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
+            try? updatedData.write(to: URL(fileURLWithPath: tokenizerConfigPath))
+        }
+    }
+
     private static func readConfigJSON(from modelPath: String) -> [String: Any]? {
         let path = (modelPath as NSString).appendingPathComponent("config.json")
         guard let data = FileManager.default.contents(atPath: path),

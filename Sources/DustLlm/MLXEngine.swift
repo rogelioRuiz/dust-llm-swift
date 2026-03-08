@@ -40,6 +40,10 @@ public final class MLXEngine: @unchecked Sendable {
         let hasVisionConfig = MLXModelDetector.isVLMModel(from: path)
         os_log(.info, log: mlxLog, "MLXEngine init – hasVisionConfig=%{public}d path=%{public}@", hasVisionConfig ? 1 : 0, path)
 
+        if hasVisionConfig {
+            MLXModelDetector.ensureChatTemplate(at: path)
+        }
+
         var loadedContainer: ModelContainer?
         var loadError: Error?
         let semaphore = DispatchSemaphore(value: 0)
