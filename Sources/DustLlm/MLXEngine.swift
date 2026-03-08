@@ -113,10 +113,10 @@ public final class MLXEngine: @unchecked Sendable {
             chatTemplate: chatTemplate,
             hasVision: isVLM
         )
-        os_log(.info, log: mlxLog, "MLXEngine ready – hasVision=%{public}d eosId=%{public}d ctxSize=%{public}d", isVLM ? 1 : 0, resolvedEos, Int32(maxPos ?? Int(config.contextSize)))
 
         let maxPos = MLXModelDetector.readMaxPositionEmbeddings(from: path)
         self.contextSize = UInt32(maxPos ?? Int(config.contextSize))
+        os_log(.info, log: mlxLog, "MLXEngine ready – hasVision=%{public}d eosId=%{public}d ctxSize=%{public}d", isVLM ? 1 : 0, resolvedEos, Int32(self.contextSize))
     }
 
     private func syncPerform<R>(_ action: @Sendable @escaping (ModelContext) throws -> R) throws -> R {
