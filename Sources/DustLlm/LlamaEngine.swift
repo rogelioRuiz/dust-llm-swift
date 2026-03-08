@@ -40,9 +40,10 @@ public protocol LlamaEngine: AnyObject, Sendable {
     ) throws -> StopReason
 
     /// Generate with native image support (early-fusion VLMs like Qwen3.5).
-    /// The engine handles image processing internally.
+    /// Messages are raw role/content pairs — the engine's VLM processor handles
+    /// chat template application and image token insertion.
     func generateWithNativeImage(
-        prompt: String,
+        messages: [[String: String]],
         imageData: Data,
         maxTokens: Int,
         sampler: SamplerConfig
@@ -50,7 +51,7 @@ public protocol LlamaEngine: AnyObject, Sendable {
 
     /// Stream generate with native image support (early-fusion VLMs like Qwen3.5).
     func generateStreamingWithNativeImage(
-        prompt: String,
+        messages: [[String: String]],
         imageData: Data,
         maxTokens: Int,
         sampler: SamplerConfig,
@@ -154,7 +155,7 @@ extension LlamaEngine {
     }
 
     public func generateWithNativeImage(
-        prompt: String,
+        messages: [[String: String]],
         imageData: Data,
         maxTokens: Int,
         sampler: SamplerConfig
@@ -163,7 +164,7 @@ extension LlamaEngine {
     }
 
     public func generateStreamingWithNativeImage(
-        prompt: String,
+        messages: [[String: String]],
         imageData: Data,
         maxTokens: Int,
         sampler: SamplerConfig,

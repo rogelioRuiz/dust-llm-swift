@@ -113,6 +113,7 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
     public func generate(
         prompt: String,
         imageData: Data? = nil,
+        messages: [[String: String]]? = nil,
         maxTokens: Int,
         stopSequences: [String],
         sampler: SamplerConfig
@@ -134,9 +135,9 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
         defer { endGeneration() }
 
         let generated: (tokens: [Int32], stopReason: StopReason)
-        if let imageData, engine.supportsNativeImage {
+        if let imageData, engine.supportsNativeImage, let messages {
             generated = try engine.generateWithNativeImage(
-                prompt: prompt,
+                messages: messages,
                 imageData: imageData,
                 maxTokens: maxTokens,
                 sampler: sampler
@@ -269,6 +270,7 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
     public func streamGenerate(
         prompt: String,
         imageData: Data? = nil,
+        messages: [[String: String]]? = nil,
         maxTokens: Int,
         stopSequences: [String],
         sampler: SamplerConfig,
@@ -373,9 +375,9 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
 
         do {
             let rawStopReason: StopReason
-            if let imageData, engine.supportsNativeImage {
+            if let imageData, engine.supportsNativeImage, let messages {
                 rawStopReason = try engine.generateStreamingWithNativeImage(
-                    prompt: prompt,
+                    messages: messages,
                     imageData: imageData,
                     maxTokens: maxTokens,
                     sampler: sampler,

@@ -274,17 +274,39 @@ extension MLXEngine: LlamaEngine {
 
     public var supportsNativeImage: Bool { isVLM }
 
+    private static func buildUserInput(
+        messages: [[String: String]],
+        imageData: Data
+    ) -> UserInput {
+        let ciImage = CIImage(data: imageData)!
+        // Build Chat.Message array; attach image to the last user message.
+        var chatMessages: [Chat.Message] = []
+        let lastUserIndex = messages.lastIndex { ($0["role"] ?? "") == "user" }
+        for (i, msg) in messages.enumerated() {
+            let role = msg["role"] ?? "user"
+            let content = msg["content"] ?? ""
+            let chatRole: Chat.Message.Role
+            switch role {
+            case "system": chatRole = .system
+            case "assistant": chatRole = .assistant
+            default: chatRole = .user
+            }
+            let images: [UserInput.Image] = (i == lastUserIndex) ? [.ciImage(ciImage)] : []
+            chatMessages.append(Chat.Message(role: chatRole, content: content, images: images))
+        }
+        return UserInput(chat: chatMessages)
+    }
+
     public func generateWithNativeImage(
-        prompt: String,
+        messages: [[String: String]],
         imageData: Data,
         maxTokens: Int,
         sampler: SamplerConfig
     ) throws -> (tokens: [Int32], stopReason: StopReason) {
         let params = Self.mapParameters(sampler, maxTokens: maxTokens)
+        let userInput = Self.buildUserInput(messages: messages, imageData: imageData)
 
         let result: (tokens: [Int32], stopReason: StopReason) = try syncPerformAsync { ctx in
-            let ciImage = CIImage(data: imageData)!
-            let userInput = UserInput(prompt: prompt, images: [.ciImage(ciImage)])
             let input = try await ctx.processor.prepare(input: userInput)
 
             var generatedTokens: [Int32] = []
@@ -312,7 +334,7 @@ extension MLXEngine: LlamaEngine {
     }
 
     public func generateStreamingWithNativeImage(
-        prompt: String,
+        messages: [[String: String]],
         imageData: Data,
         maxTokens: Int,
         sampler: SamplerConfig,
@@ -320,12 +342,11 @@ extension MLXEngine: LlamaEngine {
         onToken: (Int32) -> Void
     ) throws -> StopReason {
         let params = Self.mapParameters(sampler, maxTokens: maxTokens)
+        let userInput = Self.buildUserInput(messages: messages, imageData: imageData)
 
         return try withoutActuallyEscaping(isCancelled) { escapableIsCancelled in
             try withoutActuallyEscaping(onToken) { escapableOnToken in
                 let reason: StopReason = try syncPerformAsync { ctx in
-                    let ciImage = CIImage(data: imageData)!
-                    let userInput = UserInput(prompt: prompt, images: [.ciImage(ciImage)])
                     let input = try await ctx.processor.prepare(input: userInput)
 
                     var count = 0
