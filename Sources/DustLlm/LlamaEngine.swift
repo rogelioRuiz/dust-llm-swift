@@ -38,6 +38,28 @@ public protocol LlamaEngine: AnyObject, Sendable {
         isCancelled: () -> Bool,
         onToken: (Int32) -> Void
     ) throws -> StopReason
+
+    /// Generate with native image support (early-fusion VLMs like Qwen3.5).
+    /// The engine handles image processing internally.
+    func generateWithNativeImage(
+        prompt: String,
+        imageData: Data,
+        maxTokens: Int,
+        sampler: SamplerConfig
+    ) throws -> (tokens: [Int32], stopReason: StopReason)
+
+    /// Stream generate with native image support (early-fusion VLMs like Qwen3.5).
+    func generateStreamingWithNativeImage(
+        prompt: String,
+        imageData: Data,
+        maxTokens: Int,
+        sampler: SamplerConfig,
+        isCancelled: () -> Bool,
+        onToken: (Int32) -> Void
+    ) throws -> StopReason
+
+    /// Whether this engine handles images natively (without a separate vision encoder).
+    var supportsNativeImage: Bool { get }
 }
 
 public struct SamplerConfig: Equatable, Sendable {
@@ -130,6 +152,28 @@ extension LlamaEngine {
         _ = onToken
         throw LlamaError.unsupportedOperation("vision generation is not available for this engine")
     }
+
+    public func generateWithNativeImage(
+        prompt: String,
+        imageData: Data,
+        maxTokens: Int,
+        sampler: SamplerConfig
+    ) throws -> (tokens: [Int32], stopReason: StopReason) {
+        throw LlamaError.unsupportedOperation("native image generation is not available for this engine")
+    }
+
+    public func generateStreamingWithNativeImage(
+        prompt: String,
+        imageData: Data,
+        maxTokens: Int,
+        sampler: SamplerConfig,
+        isCancelled: () -> Bool,
+        onToken: (Int32) -> Void
+    ) throws -> StopReason {
+        throw LlamaError.unsupportedOperation("native image generation is not available for this engine")
+    }
+
+    public var supportsNativeImage: Bool { false }
 }
 
 extension LlamaContext: LlamaEngine {

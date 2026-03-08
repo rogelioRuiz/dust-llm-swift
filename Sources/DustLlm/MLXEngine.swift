@@ -1,4 +1,5 @@
 #if canImport(MLXLLM)
+import CoreImage
 import Foundation
 import MLX
 import MLXLLM
@@ -238,6 +239,97 @@ extension MLXEngine: LlamaEngine {
             try withoutActuallyEscaping(onToken) { escapableOnToken in
                 let reason: StopReason = try syncPerformAsync { ctx in
                     let input = LMInput(tokens: MLXArray(promptTokens.map { Int32($0) }))
+                    var count = 0
+                    var stopReason: StopReason = .maxTokens
+
+                    _ = try MLXLMCommon.generate(
+                        input: input,
+                        parameters: params,
+                        context: ctx
+                    ) { tokens in
+                        guard let last = tokens.last else { return .more }
+                        let token = Int32(last)
+                        count += 1
+
+                        if let eosId = ctx.tokenizer.eosTokenId, last == eosId {
+                            stopReason = .eos
+                            return .stop
+                        }
+
+                        escapableOnToken(token)
+
+                        if escapableIsCancelled() {
+                            stopReason = .cancelled
+                            return .stop
+                        }
+
+                        return count >= maxTokens ? .stop : .more
+                    }
+
+                    return stopReason
+                }
+
+                return reason
+            }
+        }
+    }
+
+    public var supportsNativeImage: Bool { isVLM }
+
+    public func generateWithNativeImage(
+        prompt: String,
+        imageData: Data,
+        maxTokens: Int,
+        sampler: SamplerConfig
+    ) throws -> (tokens: [Int32], stopReason: StopReason) {
+        let params = Self.mapParameters(sampler, maxTokens: maxTokens)
+
+        let result: (tokens: [Int32], stopReason: StopReason) = try syncPerformAsync { ctx in
+            let ciImage = CIImage(data: imageData)!
+            let userInput = UserInput(prompt: prompt, images: [.ciImage(ciImage)])
+            let input = try await ctx.processor.prepare(input: userInput)
+
+            var generatedTokens: [Int32] = []
+            var reason: StopReason = .maxTokens
+
+            _ = try MLXLMCommon.generate(
+                input: input,
+                parameters: params,
+                context: ctx
+            ) { tokens in
+                guard let last = tokens.last else { return .more }
+                generatedTokens.append(Int32(last))
+
+                if let eosId = ctx.tokenizer.eosTokenId, last == eosId {
+                    reason = .eos
+                    return .stop
+                }
+                return generatedTokens.count >= maxTokens ? .stop : .more
+            }
+
+            return (generatedTokens, reason)
+        }
+
+        return result
+    }
+
+    public func generateStreamingWithNativeImage(
+        prompt: String,
+        imageData: Data,
+        maxTokens: Int,
+        sampler: SamplerConfig,
+        isCancelled: () -> Bool,
+        onToken: (Int32) -> Void
+    ) throws -> StopReason {
+        let params = Self.mapParameters(sampler, maxTokens: maxTokens)
+
+        return try withoutActuallyEscaping(isCancelled) { escapableIsCancelled in
+            try withoutActuallyEscaping(onToken) { escapableOnToken in
+                let reason: StopReason = try syncPerformAsync { ctx in
+                    let ciImage = CIImage(data: imageData)!
+                    let userInput = UserInput(prompt: prompt, images: [.ciImage(ciImage)])
+                    let input = try await ctx.processor.prepare(input: userInput)
+
                     var count = 0
                     var stopReason: StopReason = .maxTokens
 

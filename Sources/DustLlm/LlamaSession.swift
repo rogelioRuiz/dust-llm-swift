@@ -126,7 +126,7 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
         }
 
         let visionEncoder = self.visionEncoder
-        if imageData != nil, visionEncoder == nil {
+        if imageData != nil, !engine.supportsNativeImage, visionEncoder == nil {
             throw LlamaError.unsupportedOperation("vision input requires a vision-capable model")
         }
 
@@ -134,7 +134,14 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
         defer { endGeneration() }
 
         let generated: (tokens: [Int32], stopReason: StopReason)
-        if let imageData, let visionEncoder {
+        if let imageData, engine.supportsNativeImage {
+            generated = try engine.generateWithNativeImage(
+                prompt: prompt,
+                imageData: imageData,
+                maxTokens: maxTokens,
+                sampler: sampler
+            )
+        } else if let imageData, let visionEncoder {
             let imageEmbedding = try visionEncoder.encode(imageBytes: imageData)
             defer { visionEncoder.freeEmbedding(imageEmbedding) }
 
@@ -292,7 +299,7 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
         }
 
         let visionEncoder = self.visionEncoder
-        if imageData != nil, visionEncoder == nil {
+        if imageData != nil, !engine.supportsNativeImage, visionEncoder == nil {
             onError(LlamaError.unsupportedOperation("vision input requires a vision-capable model"), 0)
             return
         }
@@ -315,9 +322,69 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
         var streamingFailure: Error?
         var promptTokenCount = promptTokens.count
 
+        // Shared token handler used by all generation paths.
+        let handleToken: (Int32) -> Void = { token in
+            if streamingFailure != nil {
+                self.requestCancellation()
+                return
+            }
+
+            generatedTokens.append(token)
+
+            let detokenizedText: String
+            do {
+                detokenizedText = try engine.detokenize(tokens: generatedTokens)
+            } catch {
+                streamingFailure = error
+                self.requestCancellation()
+                return
+            }
+
+            lastDetokenizedText = detokenizedText
+            var nextCompletionText = detokenizedText
+
+            if !stopSequences.isEmpty {
+                for sequence in stopSequences {
+                    if let range = detokenizedText.range(of: sequence) {
+                        nextCompletionText = String(detokenizedText[..<range.lowerBound])
+                        stoppedBySequence = true
+                        self.requestCancellation()
+                        break
+                    }
+                }
+            }
+
+            let tokenText: String
+            if nextCompletionText.hasPrefix(emittedText) {
+                tokenText = String(nextCompletionText.dropFirst(emittedText.count))
+                emittedText = nextCompletionText
+            } else if !stoppedBySequence {
+                tokenText = detokenizedText.hasPrefix(emittedText)
+                    ? String(detokenizedText.dropFirst(emittedText.count))
+                    : ""
+                emittedText = detokenizedText
+            } else {
+                tokenText = ""
+            }
+
+            completionText = nextCompletionText
+            onToken(generatedTokens.count - 1, token, tokenText)
+        }
+
         do {
             let rawStopReason: StopReason
-            if let imageData, let visionEncoder {
+            if let imageData, engine.supportsNativeImage {
+                rawStopReason = try engine.generateStreamingWithNativeImage(
+                    prompt: prompt,
+                    imageData: imageData,
+                    maxTokens: maxTokens,
+                    sampler: sampler,
+                    isCancelled: {
+                        self.isCancellationRequested()
+                    },
+                    onToken: handleToken
+                )
+            } else if let imageData, let visionEncoder {
                 let imageEmbedding = try visionEncoder.encode(imageBytes: imageData)
                 defer { visionEncoder.freeEmbedding(imageEmbedding) }
 
@@ -335,53 +402,7 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
                     isCancelled: {
                         self.isCancellationRequested()
                     },
-                    onToken: { token in
-                        if streamingFailure != nil {
-                            self.requestCancellation()
-                            return
-                        }
-
-                        generatedTokens.append(token)
-
-                        let detokenizedText: String
-                        do {
-                            detokenizedText = try engine.detokenize(tokens: generatedTokens)
-                        } catch {
-                            streamingFailure = error
-                            self.requestCancellation()
-                            return
-                        }
-
-                        lastDetokenizedText = detokenizedText
-                        var nextCompletionText = detokenizedText
-
-                        if !stopSequences.isEmpty {
-                            for sequence in stopSequences {
-                                if let range = detokenizedText.range(of: sequence) {
-                                    nextCompletionText = String(detokenizedText[..<range.lowerBound])
-                                    stoppedBySequence = true
-                                    self.requestCancellation()
-                                    break
-                                }
-                            }
-                        }
-
-                        let tokenText: String
-                        if nextCompletionText.hasPrefix(emittedText) {
-                            tokenText = String(nextCompletionText.dropFirst(emittedText.count))
-                            emittedText = nextCompletionText
-                        } else if !stoppedBySequence {
-                            tokenText = detokenizedText.hasPrefix(emittedText)
-                                ? String(detokenizedText.dropFirst(emittedText.count))
-                                : ""
-                            emittedText = detokenizedText
-                        } else {
-                            tokenText = ""
-                        }
-
-                        completionText = nextCompletionText
-                        onToken(generatedTokens.count - 1, token, tokenText)
-                    }
+                    onToken: handleToken
                 )
             } else {
                 rawStopReason = try engine.generateStreaming(
@@ -391,53 +412,7 @@ public final class LlamaSession: NSObject, DustModelSession, @unchecked Sendable
                     isCancelled: {
                         self.isCancellationRequested()
                     },
-                    onToken: { token in
-                        if streamingFailure != nil {
-                            self.requestCancellation()
-                            return
-                        }
-
-                        generatedTokens.append(token)
-
-                        let detokenizedText: String
-                        do {
-                            detokenizedText = try engine.detokenize(tokens: generatedTokens)
-                        } catch {
-                            streamingFailure = error
-                            self.requestCancellation()
-                            return
-                        }
-
-                        lastDetokenizedText = detokenizedText
-                        var nextCompletionText = detokenizedText
-
-                        if !stopSequences.isEmpty {
-                            for sequence in stopSequences {
-                                if let range = detokenizedText.range(of: sequence) {
-                                    nextCompletionText = String(detokenizedText[..<range.lowerBound])
-                                    stoppedBySequence = true
-                                    self.requestCancellation()
-                                    break
-                                }
-                            }
-                        }
-
-                        let tokenText: String
-                        if nextCompletionText.hasPrefix(emittedText) {
-                            tokenText = String(nextCompletionText.dropFirst(emittedText.count))
-                            emittedText = nextCompletionText
-                        } else if !stoppedBySequence {
-                            tokenText = detokenizedText.hasPrefix(emittedText)
-                                ? String(detokenizedText.dropFirst(emittedText.count))
-                                : ""
-                            emittedText = detokenizedText
-                        } else {
-                            tokenText = ""
-                        }
-
-                        completionText = nextCompletionText
-                        onToken(generatedTokens.count - 1, token, tokenText)
-                    }
+                    onToken: handleToken
                 )
             }
 
